@@ -1,0 +1,63 @@
+# ----------------------------
+# OS / Editor
+# ----------------------------
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+
+# ----------------------------
+# Environment files
+# ----------------------------
+.env
+.env.*
+!.env.example
+
+# ----------------------------
+# Python / Django
+# ----------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.sqlite3
+*.log
+*.pot
+*.pyc
+db.sqlite3
+media/
+staticfiles/
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+ruff_cache/
+venv/
+.venv/
+env/
+
+# ----------------------------
+# Node / React / Vite
+# ----------------------------
+node_modules/
+dist/
+build/
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ----------------------------
+# PostgreSQL / misc
+# ----------------------------
+postgres_data/
+*.bak
+
+# ----------------------------
+# Generated files
+# ----------------------------
+*.zip
+*.tar.gz

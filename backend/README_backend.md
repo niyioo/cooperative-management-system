@@ -1,2 +1,0 @@
-# Backend
-See main README.
