@@ -21,6 +21,5 @@ RUN pip install -r requirements.txt
 # Copy project
 COPY . /app/
 
-# ✅ NEW: The command that runs when Render starts the container
-# It runs migrations first, then starts the web server
-CMD sh -c "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT"
+# ✅ NEW: Automatically make migrations, then migrate, then start the server
+CMD sh -c "python manage.py makemigrations && python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT"
