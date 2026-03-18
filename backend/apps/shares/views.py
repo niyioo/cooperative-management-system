@@ -4,7 +4,7 @@ from rest_framework.decorators import action
 from django.db import transaction
 from .models import ShareAccount, ShareTransaction
 from .serializers import ShareAccountSerializer, ShareTransactionSerializer
-from apps.accounts.permissions import IsManagerOrAdmin
+from apps.accounts.permissions import IsManagerOrAdmin # Update path if needed
 
 class ShareAccountViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ShareAccountSerializer
@@ -12,9 +12,10 @@ class ShareAccountViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        queryset = ShareAccount.objects.select_related('member').all()
         if user.role in ['SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT']:
-            return ShareAccount.objects.all()
-        return ShareAccount.objects.filter(member__user=user)
+            return queryset
+        return queryset.filter(member__user=user)
 
 class ShareTransactionViewSet(viewsets.ModelViewSet):
     serializer_class = ShareTransactionSerializer
@@ -25,6 +26,31 @@ class ShareTransactionViewSet(viewsets.ModelViewSet):
         if user.role in ['SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT']:
             return ShareTransaction.objects.all()
         return ShareTransaction.objects.filter(account__member__user=user)
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        
+        if user.role in ['SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT']:
+            account = serializer.validated_data.get('account')
+            txn_status = ShareTransaction.Status.APPROVED
+            approved_by = user
+        else:
+            account = ShareAccount.objects.get(member__user=user)
+            txn_status = ShareTransaction.Status.PENDING
+            approved_by = None
+
+        with transaction.atomic():
+            txn = serializer.save(
+                account=account,
+                status=txn_status,
+                approved_by=approved_by
+            )
+            
+            # Auto-update if Manager creates it
+            if txn.status == ShareTransaction.Status.APPROVED:
+                account.total_shares += txn.number_of_shares
+                account.current_value += txn.total_amount
+                account.save()
 
     @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin])
     def approve(self, request, pk=None):
@@ -37,10 +63,20 @@ class ShareTransactionViewSet(viewsets.ModelViewSet):
             txn.approved_by = request.user
             txn.save()
 
-            # Update Share Account
             account = txn.account
-            account.total_shares += txn.shares_bought
-            account.total_value += txn.total_amount
+            account.total_shares += txn.number_of_shares
+            account.current_value += txn.total_amount
             account.save()
 
         return Response({"status": "Shares approved and ledger updated."})
+
+    @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin])
+    def reject(self, request, pk=None):
+        """Allows Admins to reject a pending share purchase."""
+        txn = self.get_object()
+        if txn.status != ShareTransaction.Status.PENDING:
+            return Response({"detail": "Only pending requests can be rejected."}, status=status.HTTP_400_BAD_REQUEST)
+
+        txn.status = ShareTransaction.Status.REJECTED
+        txn.save()
+        return Response({"status": "Share purchase request rejected."})

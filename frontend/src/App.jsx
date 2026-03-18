@@ -2,16 +2,26 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './routes/ProtectedRoute';
 
+// Layouts & Auth
 import Login from './pages/Login';
 import DashboardLayout from './layouts/DashboardLayout';
-import AdminDashboard from './pages/dashboard/AdminDashboard';
 
-// A simple unauthorized fallback component
+// Dashboard Pages
+import AdminDashboard from './pages/dashboard/AdminDashboard';
+import Members from './pages/dashboard/Members';
+import Savings from './pages/dashboard/Savings';
+import Loans from './pages/dashboard/Loans';
+import Shares from './pages/dashboard/Shares';
+import Contributions from './pages/dashboard/Contributions';
+import FinanceLedger from './pages/finance/FinanceLedger';
+import Settings from './pages/dashboard/Settings';
+import Notifications from './pages/dashboard/Notifications';
+
 const Unauthorized = () => (
   <div className="flex h-screen items-center justify-center bg-slate-50">
     <div className="text-center">
       <h1 className="text-4xl font-bold text-slate-900 mb-2">403</h1>
-      <p className="text-slate-600 mb-4">You don't have permission to access this page.</p>
+      <p className="text-slate-600 mb-4">You do not have permission to access this page.</p>
       <a href="/dashboard" className="text-blue-600 hover:underline">Return to Dashboard</a>
     </div>
   </div>
@@ -31,6 +41,14 @@ function App() {
             <Route path="/" element={<DashboardLayout />}>
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="dashboard" element={<AdminDashboard />} />
+              <Route path="members" element={<Members />} />
+              <Route path="savings" element={<Savings />} />
+              <Route path="loans" element={<Loans />} />
+              <Route path="shares" element={<Shares />} />
+              <Route path="contributions" element={<Contributions />} />
+              <Route path="finance" element={<FinanceLedger />} />
+              <Route path="settings" element={<Settings />} />
+              <Route path="notifications" element={<Notifications />} />
             </Route>
           </Route>
 

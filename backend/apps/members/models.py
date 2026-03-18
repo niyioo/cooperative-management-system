@@ -1,3 +1,4 @@
+import datetime
 from django.db import models
 from django.conf import settings
 from apps.core.models import TimeStampedUUIDModel
@@ -24,14 +25,16 @@ class Member(TimeStampedUUIDModel):
 
     def save(self, *args, **kwargs):
         if not self.membership_id:
-            # Generate a simple unique membership ID (In production, use a robust sequence generator)
+            current_year = datetime.datetime.now().year
             last_member = Member.objects.order_by('-created_at').first()
             if last_member and last_member.membership_id:
+                # Extract the last 4 digits (e.g., from COOP-2024-0001)
                 last_id = int(last_member.membership_id.split('-')[-1])
-                self.membership_id = f"COOP-{self.created_at.year if self.created_at else '0000'}-{last_id + 1:04d}"
+                self.membership_id = f"COOP-{current_year}-{last_id + 1:04d}"
             else:
-                self.membership_id = "COOP-2024-0001"
+                self.membership_id = f"COOP-{current_year}-0001"
         super().save(*args, **kwargs)
+
 
 class NextOfKin(TimeStampedUUIDModel):
     member = models.OneToOneField(Member, on_delete=models.CASCADE, related_name='next_of_kin')

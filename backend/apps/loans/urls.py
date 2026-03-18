@@ -4,7 +4,7 @@ from .views import LoanProductViewSet, LoanViewSet, LoanRepaymentViewSet
 
 router = DefaultRouter()
 router.register(r'products', LoanProductViewSet, basename='loan_product')
-router.register(r'applications', LoanViewSet, basename='loan')
+router.register(r'applications', LoanViewSet, basename='loan') # This creates /loans/applications/
 router.register(r'repayments', LoanRepaymentViewSet, basename='loan_repayment')
 
 urlpatterns = [

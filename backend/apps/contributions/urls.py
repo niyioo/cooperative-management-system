@@ -1,11 +1,10 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import ContributionTypeViewSet, ContributionRecordViewSet, FineViewSet
+from .views import ContributionViewSet
 
 router = DefaultRouter()
-router.register(r'types', ContributionTypeViewSet, basename='contribution_type')
-router.register(r'records', ContributionRecordViewSet, basename='contribution_record')
-router.register(r'fines', FineViewSet, basename='fine')
+# Maps to /contributions/
+router.register(r'', ContributionViewSet, basename='contribution')
 
 urlpatterns = [
     path('', include(router.urls)),

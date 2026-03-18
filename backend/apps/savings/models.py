@@ -1,9 +1,14 @@
 from django.db import models
 from apps.core.models import TimeStampedUUIDModel
 from apps.members.models import Member
+import random, string
+
+def generate_account_number():
+    return ''.join(random.choices(string.digits, k=10))
 
 class SavingsAccount(TimeStampedUUIDModel):
     member = models.OneToOneField(Member, on_delete=models.CASCADE, related_name='savings_account')
+    account_number = models.CharField(max_length=20, unique=True, null=True, blank=True)
     balance = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
     last_updated = models.DateTimeField(auto_now=True)
 

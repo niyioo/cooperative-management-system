@@ -1,35 +1,40 @@
+import uuid
 from django.db import models
 from apps.core.models import TimeStampedUUIDModel
 from apps.members.models import Member
 from django.conf import settings
 
-class ContributionType(TimeStampedUUIDModel):
-    name = models.CharField(max_length=100, unique=True)
-    description = models.TextField(blank=True, null=True)
-    default_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    is_mandatory = models.BooleanField(default=False)
+class Contribution(TimeStampedUUIDModel):
+    """
+    Unified model tracking member assessments: Monthly Dues, Project Levies, and Penalty Fines.
+    """
+    class TypeChoices(models.TextChoices):
+        MONTHLY_DUES = 'MONTHLY_DUES', 'Monthly Dues'
+        LEVY = 'LEVY', 'Project Levy'
+        FINE = 'FINE', 'Penalty Fine'
 
-    def __str__(self):
-        return f"{self.name} - {'Mandatory' if self.is_mandatory else 'Voluntary'}"
+    class StatusChoices(models.TextChoices):
+        PENDING = 'PENDING', 'Pending Payment'
+        PAID = 'PAID', 'Paid'
 
-class ContributionRecord(TimeStampedUUIDModel):
     member = models.ForeignKey(Member, on_delete=models.CASCADE, related_name='contributions')
-    contribution_type = models.ForeignKey(ContributionType, on_delete=models.RESTRICT)
-    amount_paid = models.DecimalField(max_digits=10, decimal_places=2)
-    payment_date = models.DateField(auto_now_add=True)
-    receipt_reference = models.CharField(max_length=100, unique=True)
+    type = models.CharField(max_length=20, choices=TypeChoices.choices)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    due_date = models.DateField(null=True, blank=True)
+    
+    reference_id = models.CharField(max_length=100, unique=True, blank=True)
+    status = models.CharField(max_length=20, choices=StatusChoices.choices, default=StatusChoices.PENDING)
+    
+    # Audit trail
     received_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
-
-    def __str__(self):
-        return f"{self.member.first_name} - {self.contribution_type.name} ({self.amount_paid})"
-
-class Fine(TimeStampedUUIDModel):
-    member = models.ForeignKey(Member, on_delete=models.CASCADE, related_name='fines')
-    reason = models.CharField(max_length=255)
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
-    is_paid = models.BooleanField(default=False)
-    date_issued = models.DateField(auto_now_add=True)
     date_paid = models.DateField(null=True, blank=True)
 
+    def save(self, *args, **kwargs):
+        if not self.reference_id:
+            # e.g., FINE-A1B2C3D4 or DUES-A1B2C3D4
+            prefix = self.type.split('_')[-1][:4] 
+            self.reference_id = f"{prefix}-{uuid.uuid4().hex[:8].upper()}"
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f"Fine: {self.reason} - {self.member.membership_id} ({'Paid' if self.is_paid else 'Unpaid'})"
+        return f"{self.member.first_name} - {self.get_type_display()} (₦{self.amount}) - {self.status}"

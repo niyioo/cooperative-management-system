@@ -1,21 +1,25 @@
 from rest_framework import serializers
-from .models import ContributionType, ContributionRecord, Fine
+from .models import Contribution
+from apps.members.models import Member
 
-class ContributionTypeSerializer(serializers.ModelSerializer):
+class NestedMemberSerializer(serializers.ModelSerializer):
     class Meta:
-        model = ContributionType
-        fields = '__all__'
+        model = Member
+        fields = ['id', 'first_name', 'last_name', 'membership_id']
 
-class ContributionRecordSerializer(serializers.ModelSerializer):
-    type_name = serializers.CharField(source='contribution_type.name', read_only=True)
+class ContributionSerializer(serializers.ModelSerializer):
+    # For reading (GET requests)
+    member = NestedMemberSerializer(read_only=True)
+    
+    # For writing (POST requests from the React Modal)
+    member_id = serializers.PrimaryKeyRelatedField(
+        queryset=Member.objects.all(), source='member', write_only=True
+    )
 
     class Meta:
-        model = ContributionRecord
-        fields = '__all__'
-        read_only_fields = ['id', 'payment_date', 'received_by', 'created_at']
-
-class FineSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Fine
-        fields = '__all__'
-        read_only_fields = ['id', 'date_issued', 'date_paid', 'created_at']
+        model = Contribution
+        fields = [
+            'id', 'member', 'member_id', 'type', 'amount', 
+            'due_date', 'reference_id', 'status', 'created_at'
+        ]
+        read_only_fields = ['id', 'reference_id', 'created_at']

@@ -61,3 +61,37 @@ postgres_data/
 # ----------------------------
 *.zip
 *.tar.gz
+# Environments
+.env
+.env.*
+!.env.example
+
+# Python / Django
+backend/venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.sqlite3
+backend/media/
+backend/static/
+
+# Node / React
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.eslintcache
+
+# OS Files
+.DS_Store
+Thumbs.db
+backend/apps/loans/migrations/0002_loan_loan_id.py
+backend/apps/accounts/migrations/0002_customuser_first_name_customuser_last_name.py
+backend/apps/contributions/migrations/0002_remove_contributionrecord_contribution_type_and_more.py
+backend/apps/finance/migrations/0002_remove_income_recorded_by_ledgerentry_delete_expense_and_more.py
+backend/apps/finance/migrations/0003_ledgerentry_member.py
+backend/apps/loans/migrations/0003_loan_purpose_loanproduct_description.py
+backend/apps/savings/migrations/0002_savingsaccount_account_number.py
+backend/apps/shares/migrations/0002_rename_total_value_shareaccount_current_value_and_more.py

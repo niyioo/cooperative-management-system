@@ -1,20 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import axiosInstance from '../../api/axios';
 import { useAuth } from '../../hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
 import { 
-    Users, Wallet, Landmark, TrendingUp, Loader2 
+    Users, Wallet, Landmark, TrendingUp, Loader2, PieChart, AlertCircle, FileDown, CheckCircle
 } from 'lucide-react';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
 } from 'recharts';
+import MemberDashboard from './MemberDashboard';
 
 const StatCard = ({ title, value, icon: Icon, colorClass }) => (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6 flex items-center">
+    <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6 flex items-center transition-transform hover:scale-[1.02]">
         <div className={`p-4 rounded-lg mr-4 ${colorClass}`}>
             <Icon className="h-6 w-6 text-white" />
         </div>
         <div>
-            <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
+            <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{title}</p>
             <h3 className="text-2xl font-bold text-slate-800">{value}</h3>
         </div>
     </div>
@@ -22,144 +24,178 @@ const StatCard = ({ title, value, icon: Icon, colorClass }) => (
 
 const AdminDashboard = () => {
     const { user, isManager } = useAuth();
+    const navigate = useNavigate();
     const [summary, setSummary] = useState(null);
     const [loading, setLoading] = useState(true);
-
-    // Mock data for the chart to make the dashboard look complete 
-    // In production, this would come from a specific time-series endpoint
-    const mockChartData = [
-        { month: 'Jan', income: 4000, expenses: 2400 },
-        { month: 'Feb', income: 3000, expenses: 1398 },
-        { month: 'Mar', income: 2000, expenses: 9800 },
-        { month: 'Apr', income: 2780, expenses: 3908 },
-        { month: 'May', income: 1890, expenses: 4800 },
-        { month: 'Jun', income: 2390, expenses: 3800 },
-        { month: 'Jul', income: 3490, expenses: 4300 },
-    ];
+    const [error, setError] = useState('');
+    const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
     useEffect(() => {
         const fetchSummary = async () => {
             try {
                 const response = await axiosInstance.get('/reports/dashboard-summary/');
                 setSummary(response.data);
-            } catch (error) {
-                console.error("Failed to fetch dashboard summary", error);
+            } catch (err) {
+                console.error("Dashboard fetch error:", err);
+                setError('Live connection lost. Showing fallback data.');
+                setSummary({
+                    role: 'ADMIN',
+                    members: { active: 0 },
+                    financials: { total_savings: 0, total_loans_disbursed: 0, net_profit: 0 },
+                    chart_data: [] 
+                });
             } finally {
                 setLoading(false);
             }
         };
-
         fetchSummary();
     }, []);
 
     const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount || 0);
+        const val = parseFloat(amount) || 0;
+        return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(val);
     };
 
-    if (loading) {
-        return (
-            <div className="flex h-full items-center justify-center">
-                <Loader2 className="animate-spin h-8 w-8 text-blue-500" />
-            </div>
-        );
-    }
+    const downloadFullReport = async () => {
+        if (!summary) return;
+        setIsGeneratingPdf(true);
+        try {
+            const response = await axiosInstance.get('/reports/dashboard-summary/export_pdf/', {
+                responseType: 'blob',
+            });
 
-    if (!isManager && summary?.role === 'MEMBER') {
-        // Fallback for regular members
-        return (
-            <div>
-                <h1 className="text-2xl font-bold text-slate-900 mb-6">Welcome back, Member</h1>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <StatCard title="Total Savings" value={formatCurrency(summary.total_savings)} icon={Wallet} colorClass="bg-blue-500" />
-                    <StatCard title="Total Shares Value" value={formatCurrency(summary.total_shares_value)} icon={PieChart} colorClass="bg-purple-500" />
-                    <StatCard title="Outstanding Loan" value={formatCurrency(summary.outstanding_loan_balance)} icon={Landmark} colorClass="bg-red-500" />
-                </div>
-            </div>
-        );
-    }
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `BravEdge_Executive_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (e) {
+            console.error("Backend PDF generation failed", e);
+            alert('Failed to generate high-quality report. Please check server.');
+        } finally {
+            setIsGeneratingPdf(false);
+        }
+    };
+
+    if (loading) return (
+        <div className="flex h-[80vh] items-center justify-center">
+            <Loader2 className="animate-spin h-10 w-10 text-blue-600" />
+        </div>
+    );
+
+    if (!isManager) return <MemberDashboard />;
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-slate-900">Cooperative Overview</h1>
-                <span className="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded">
-                    Admin Privileges
-                </span>
+        <div className="space-y-6 animate-in fade-in duration-500">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center space-x-3">
+                    <div 
+                        onClick={() => navigate('/settings')}
+                        className="h-12 w-12 rounded-full bg-slate-900 flex items-center justify-center text-white font-bold cursor-pointer hover:ring-4 ring-blue-50 transition-all shadow-lg"
+                    >
+                        {user?.email?.[0].toUpperCase() || 'A'}
+                    </div>
+                    <div>
+                        <h1 className="text-2xl font-black text-slate-900 tracking-tight">Cooperative Overview</h1>
+                        <p className="text-xs font-bold text-blue-600 uppercase tracking-tighter">System Administrator</p>
+                    </div>
+                </div>
             </div>
 
-            {/* Top Stats Grid */}
+            {error && (
+                <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg flex items-center">
+                    <AlertCircle className="h-5 w-5 text-amber-500 mr-2" />
+                    <p className="text-xs font-bold text-amber-700 uppercase tracking-tight">{error}</p>
+                </div>
+            )}
+
+            {/* Live Stats */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatCard 
-                    title="Active Members" 
-                    value={summary?.members?.active || 0} 
-                    icon={Users} 
-                    colorClass="bg-blue-500" 
-                />
-                <StatCard 
-                    title="Total Savings Pool" 
-                    value={formatCurrency(summary?.financials?.total_savings)} 
-                    icon={Wallet} 
-                    colorClass="bg-emerald-500" 
-                />
-                <StatCard 
-                    title="Active Loans Disbursed" 
-                    value={formatCurrency(summary?.financials?.total_loans_disbursed)} 
-                    icon={Landmark} 
-                    colorClass="bg-indigo-500" 
-                />
-                <StatCard 
-                    title="Net Profit (Income - Exp.)" 
-                    value={formatCurrency(summary?.financials?.net_profit)} 
-                    icon={TrendingUp} 
-                    colorClass="bg-violet-500" 
-                />
+                <StatCard title="Active Members" value={summary?.members?.active || 0} icon={Users} colorClass="bg-blue-600" />
+                <StatCard title="Savings Pool" value={formatCurrency(summary?.financials?.total_savings)} icon={Wallet} colorClass="bg-emerald-600" />
+                <StatCard title="Loans Active" value={formatCurrency(summary?.financials?.total_loans_disbursed)} icon={Landmark} colorClass="bg-indigo-600" />
+                <StatCard title="Net Profit" value={formatCurrency(summary?.financials?.net_profit)} icon={TrendingUp} colorClass="bg-slate-900" />
             </div>
 
-            {/* Charts & Details Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
-                
-                {/* Main Chart */}
-                <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-                    <h2 className="text-lg font-semibold text-slate-800 mb-4">Financial Growth (Mock Trend)</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Financial Performance Chart */}
+                <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+                    <div className="flex items-center justify-between mb-6">
+                        <h2 className="text-lg font-bold text-slate-800">Financial Performance</h2>
+                        <div className="flex items-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                            <CheckCircle className="h-3 w-3 mr-1 text-emerald-500" /> Live Data
+                        </div>
+                    </div>
                     <div className="h-80">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={mockChartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                                <XAxis dataKey="month" axisLine={false} tickLine={false} />
-                                <YAxis axisLine={false} tickLine={false} tickFormatter={(val) => `₦${val/1000}k`} />
-                                <Tooltip cursor={{fill: '#f8fafc'}} />
-                                <Legend />
-                                <Bar dataKey="income" name="Income" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                                <Bar dataKey="expenses" name="Expenses" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                            <BarChart data={summary?.chart_data || []}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 'bold'}} />
+                                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10}} tickFormatter={(val) => `₦${val >= 1000 ? val/1000 + 'k' : val}`} />
+                                <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                                <Bar dataKey="income" name="Income" fill="#10b981" radius={[4, 4, 0, 0]} barSize={30} />
+                                <Bar dataKey="expenses" name="Expenses" fill="#f43f5e" radius={[4, 4, 0, 0]} barSize={30} />
+                                <Legend wrapperStyle={{paddingTop: '20px', fontSize: '12px', fontWeight: 'bold'}} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
                 </div>
 
-                {/* Quick Snapshot List */}
-                <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-                    <h2 className="text-lg font-semibold text-slate-800 mb-4">Financial Snapshot</h2>
-                    <div className="space-y-4">
-                        <div className="flex justify-between items-center pb-4 border-b border-slate-100">
-                            <span className="text-slate-500">Total Share Capital</span>
-                            <span className="font-semibold text-slate-800">{formatCurrency(summary?.financials?.total_shares)}</span>
-                        </div>
-                        <div className="flex justify-between items-center pb-4 border-b border-slate-100">
-                            <span className="text-slate-500">Outstanding Loan Balance</span>
-                            <span className="font-semibold text-amber-600">{formatCurrency(summary?.financials?.outstanding_loans)}</span>
-                        </div>
-                        <div className="flex justify-between items-center pb-4 border-b border-slate-100">
-                            <span className="text-slate-500">Total Coop Income</span>
-                            <span className="font-semibold text-emerald-600">{formatCurrency(summary?.financials?.coop_income)}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span className="text-slate-500">Total Coop Expenses</span>
-                            <span className="font-semibold text-red-600">{formatCurrency(summary?.financials?.coop_expenses)}</span>
+                {/* Treasury Snapshot & Enhanced Button */}
+                <div className="bg-slate-900 rounded-3xl p-8 text-white shadow-2xl flex flex-col justify-between">
+                    <div>
+                        <h2 className="text-xl font-black mb-8 flex items-center tracking-tight text-blue-400">
+                            <PieChart className="h-6 w-6 mr-3" />
+                            Treasury Snapshot
+                        </h2>
+                        <div className="space-y-6">
+                            <div className="flex justify-between border-b border-slate-800 pb-4">
+                                <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Share Capital</span>
+                                <span className="font-bold text-white">{formatCurrency(summary?.financials?.total_shares)}</span>
+                            </div>
+                            <div className="flex justify-between border-b border-slate-800 pb-4">
+                                <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Gross Income</span>
+                                <span className="font-bold text-emerald-400">{formatCurrency(summary?.financials?.coop_income)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Total Expenses</span>
+                                <span className="font-bold text-rose-400">{formatCurrency(summary?.financials?.coop_expenses)}</span>
+                            </div>
                         </div>
                     </div>
                     
-                    <button className="w-full mt-6 bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium py-2 px-4 rounded-lg border border-slate-200 transition-colors">
-                        Generate Full Report
+                    {/* Finer and Bolder Button */}
+                    <button 
+                        onClick={downloadFullReport}
+                        disabled={isGeneratingPdf}
+                        className="
+                            w-full mt-12 py-4 px-6 
+                            bg-white text-slate-900 
+                            hover:bg-blue-50 hover:text-blue-700
+                            active:scale-[0.98] 
+                            rounded-2xl 
+                            font-black uppercase tracking-widest text-[11px]
+                            flex items-center justify-center 
+                            transition-all duration-200
+                            shadow-[0_0_20px_rgba(59,130,246,0.15)] 
+                            hover:shadow-[0_0_25px_rgba(59,130,246,0.3)]
+                            disabled:opacity-50 disabled:cursor-not-allowed
+                            border border-transparent hover:border-blue-200
+                        "
+                    >
+                        {isGeneratingPdf ? (
+                            <Loader2 className="animate-spin h-5 w-5 mr-3" />
+                        ) : (
+                            <>
+                                <FileDown className="h-5 w-5 mr-3 stroke-[2.5]" /> 
+                                Generate Executive Report
+                            </>
+                        )}
                     </button>
                 </div>
             </div>

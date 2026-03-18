@@ -15,7 +15,10 @@ class CustomUserManager(BaseUserManager):
     def create_superuser(self, email, password=None, **extra_fields):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
-        extra_fields.setdefault('role', CustomUser.Role.SUPER_ADMIN)
+        
+        # FIX: Replaced CustomUser.Role.SUPER_ADMIN with the string 'SUPER_ADMIN'
+        # to prevent Python NameError since CustomUser isn't defined yet.
+        extra_fields.setdefault('role', 'SUPER_ADMIN')
 
         if extra_fields.get('is_staff') is not True:
             raise ValueError('Superuser must have is_staff=True.')
@@ -33,6 +36,11 @@ class CustomUser(AbstractBaseUser, PermissionsMixin, TimeStampedUUIDModel):
         MEMBER = 'MEMBER', 'Member'
 
     email = models.EmailField(unique=True)
+    
+    # ✅ ADDED: First and Last Name fields
+    first_name = models.CharField(max_length=150, blank=True)
+    last_name = models.CharField(max_length=150, blank=True)
+    
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.MEMBER)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
@@ -40,7 +48,10 @@ class CustomUser(AbstractBaseUser, PermissionsMixin, TimeStampedUUIDModel):
     objects = CustomUserManager()
 
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = []
+    REQUIRED_FIELDS = [] # You can add ['first_name', 'last_name'] here if you want the CLI to prompt for them during createsuperuser
 
     def __str__(self):
-        return f"{self.email} - {self.role}"
+        # Updated to show the name if it exists, otherwise fallback to email
+        full_name = f"{self.first_name} {self.last_name}".strip()
+        display_name = full_name if full_name else self.email
+        return f"{display_name} - {self.role}"
