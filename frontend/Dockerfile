@@ -1,11 +1,11 @@
 # /frontend/Dockerfile
-FROM node:18-alpine
+FROM node:20-slim
 
 # Set work directory
 WORKDIR /app
 
 # Install dependencies
-COPY package.json package-lock.json* ./
+COPY package.json ./
 RUN npm install
 
 # Copy project

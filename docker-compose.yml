@@ -14,12 +14,17 @@ services:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    # ✅ ADDED: Healthcheck so the backend knows when it's safe to connect
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U coop_user -d cooperative_db"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
 
   # 2. Django Backend
   backend:
     build: ./backend
     container_name: bravedge_backend
-    # This command runs migrations automatically before starting the server
     command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
     volumes:
       - ./backend:/app
@@ -31,11 +36,13 @@ services:
       - DB_NAME=cooperative_db
       - DB_USER=coop_user
       - DB_PASSWORD=Coop@12345
-      - DB_HOST=db  # <--- This is where the magic happens!
+      - DB_HOST=db
       - DB_PORT=5432
       - CORS_ALLOWED_ORIGIN=http://localhost:5173
     depends_on:
-      - db
+      # ✅ ADDED: Tell the backend to wait for the db healthcheck to pass
+      db:
+        condition: service_healthy
 
   # 3. React Frontend
   frontend:
@@ -48,7 +55,7 @@ services:
       - ./frontend:/app
       - /app/node_modules
     environment:
-      - VITE_API_BASE_URL=http://localhost:8000/api
+      - VITE_API_BASE_URL=http://localhost:8000/api/v1
     depends_on:
       - backend
 
