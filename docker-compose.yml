@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # 1. PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: bravedge_db
+    restart: always
+    environment:
+      POSTGRES_DB: cooperative_db
+      POSTGRES_USER: coop_user
+      POSTGRES_PASSWORD: Coop@12345
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  # 2. Django Backend
+  backend:
+    build: ./backend
+    container_name: bravedge_backend
+    # This command runs migrations automatically before starting the server
+    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=True
+      - ALLOWED_HOSTS=*
+      - DB_NAME=cooperative_db
+      - DB_USER=coop_user
+      - DB_PASSWORD=Coop@12345
+      - DB_HOST=db  # <--- This is where the magic happens!
+      - DB_PORT=5432
+      - CORS_ALLOWED_ORIGIN=http://localhost:5173
+    depends_on:
+      - db
+
+  # 3. React Frontend
+  frontend:
+    build: ./frontend
+    container_name: bravedge_frontend
+    command: npm run dev -- --host 0.0.0.0
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000/api
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
