@@ -9,6 +9,8 @@ const __dirname = path.dirname(__filename);
 
 export default defineConfig({
   plugins: [react()],
+  // ✅ ADDED: This tells Vite where the app will be hosted on GitHub Pages
+  base: '/cooperative-management-system/',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
