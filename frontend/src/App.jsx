@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './routes/ProtectedRoute';
 
@@ -22,7 +22,8 @@ const Unauthorized = () => (
     <div className="text-center">
       <h1 className="text-4xl font-bold text-slate-900 mb-2">403</h1>
       <p className="text-slate-600 mb-4">You do not have permission to access this page.</p>
-      <a href="/dashboard" className="text-blue-600 hover:underline">Return to Dashboard</a>
+      {/* Replaced standard <a> tag with React Router's <Link> for Hash compatibility */}
+      <Link to="/dashboard" className="text-blue-600 hover:underline">Return to Dashboard</Link>
     </div>
   </div>
 );

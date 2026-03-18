@@ -39,7 +39,7 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
         setUser(null);
-        window.location.href = `${import.meta.env.BASE_URL}login`;
+        window.location.href = `${import.meta.env.BASE_URL}#/login`;
     };
 
     const value = {
