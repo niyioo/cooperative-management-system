@@ -19,7 +19,7 @@ class ShareTransaction(TimeStampedUUIDModel):
         REJECTED = 'REJECTED', 'Rejected'
 
     account = models.ForeignKey(ShareAccount, on_delete=models.CASCADE, related_name='transactions')
-    number_of_shares = models.PositiveIntegerField() # Renamed to match React
+    number_of_shares = models.PositiveIntegerField(default=0) # Renamed to match React
     price_per_share = models.DecimalField(max_digits=10, decimal_places=2)
     total_amount = models.DecimalField(max_digits=15, decimal_places=2, editable=False)
     
