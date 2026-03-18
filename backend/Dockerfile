@@ -21,5 +21,5 @@ RUN pip install -r requirements.txt
 # Copy project
 COPY . /app/
 
-# ✅ NEW: Automatically make migrations, then migrate, then start the server
-CMD sh -c "python manage.py makemigrations && python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT"
+# ✅ NEW: Add --noinput so Django doesn't ask Yes/No questions
+CMD sh -c "python manage.py makemigrations --noinput && python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT"
