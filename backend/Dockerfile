@@ -21,5 +21,4 @@ RUN pip install -r requirements.txt
 # Copy project
 COPY . /app/
 
-# ✅ NEW: Add --noinput so Django doesn't ask Yes/No questions
-CMD sh -c "python manage.py makemigrations --noinput && python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT"
+CMD ["sh", "-c", "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT"]
