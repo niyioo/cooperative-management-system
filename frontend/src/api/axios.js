@@ -47,7 +47,7 @@ axiosInstance.interceptors.response.use(
                 // If refresh fails (e.g., refresh token expired), force logout
                 localStorage.removeItem('accessToken');
                 localStorage.removeItem('refreshToken');
-                window.location.href = '/login';
+                window.location.href = `${import.meta.env.BASE_URL}login`;
                 return Promise.reject(refreshError);
             }
         }
