@@ -13,6 +13,31 @@ An advanced, full-stack Cooperative Management System designed to handle members
 * **Financial Ledger:** Global cooperative income and expense tracking.
 * **Analytics Dashboard:** Real-time visual metrics using Recharts.
 
+## 📸 System Preview
+
+### 🖥️ Admin Dashboard
+The central hub for system administrators to monitor liquidity, active members, and treasury health.
+![Dashboard Overview](./docs/screenshots/dashboard.png)
+
+### 👥 Member Management
+Track registered members, their status, and detailed financial profiles.
+![Members Page](./docs/screenshots/members_page.png)
+
+### 💰 Loans & Credit Portal
+A robust engine for managing loan products, applications, and repayment tracking.
+![Loan Management](./docs/screenshots/loan_management.png)
+![Loan Application](./docs/screenshots/loan_application.png)
+
+### 🏦 Savings & Contributions
+Manage member wallets, total liquidity pool, and mandatory levies.
+![Savings Management](./docs/screenshots/savings.png)
+![Contributions](./docs/screenshots/contribution.png)
+
+### 🧾 Finance Ledger
+A master account history for tracking every income and expense transaction within the system.
+![Finance Ledger](./docs/screenshots/finance_ledger.png)
+
+
 ## 🛠️ Tech Stack
 
 **Backend**
@@ -27,6 +52,10 @@ An advanced, full-stack Cooperative Management System designed to handle members
 * React Router v6
 * Axios (with automated interceptors)
 * Lucide React & Recharts
+
+**Database:** PostgreSQL (Hosted on Render)
+**Deployment:** GitHub Pages (Frontend) & Render (Backend)
+**DevOps:** Docker, Docker Compose
 
 ## 📋 Prerequisites
 
@@ -132,10 +161,7 @@ cooperative-management-system/
 │   ├── index.html
 │   ├── tailwind.config.js
 │   └── package.json
+└── docs/screenshots/         # UI Images
 ├── .gitignore
 └── README.md
-
-## System Preview
-![Dashboard Overview](./docs/screenshots/dashboard.png)
-![Loan Management](./docs/screenshots/loan_management.png)
 ```
