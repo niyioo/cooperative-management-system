@@ -134,4 +134,8 @@ cooperative-management-system/
 │   └── package.json
 ├── .gitignore
 └── README.md
+
+## System Preview
+![Dashboard Overview](./docs/screenshots/dashboard.png)
+![Loan Management](./docs/screenshots/loan_management.png)
 ```
