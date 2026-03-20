@@ -9,11 +9,26 @@ class LoanProductAdmin(admin.ModelAdmin):
 
 @admin.register(Loan)
 class LoanAdmin(admin.ModelAdmin):
-    # ✅ Replaced 'principal' with 'principal_amount' and used 'application_date'
     list_display = ('loan_id', 'member', 'loan_product', 'principal_amount', 'status', 'application_date')
     list_filter = ('status', 'loan_product', 'application_date')
     search_fields = ('loan_id', 'member__membership_id', 'member__first_name', 'member__last_name')
     readonly_fields = ('loan_id', 'interest_amount', 'total_payable', 'balance_remaining')
+    
+    # ✅ 1. Tell Django to use these custom actions
+    actions = ['approve_loans', 'reject_loans']
+
+    # ✅ 2. Create the "Approve" button
+    @admin.action(description='✅ Approve selected loans')
+    def approve_loans(self, request, queryset):
+        # This updates the status of all selected loans instantly
+        updated_count = queryset.update(status='APPROVED')
+        self.message_user(request, f"Successfully approved {updated_count} loan(s).")
+
+    # ✅ 3. Create the "Reject" button
+    @admin.action(description='❌ Reject selected loans')
+    def reject_loans(self, request, queryset):
+        updated_count = queryset.update(status='REJECTED')
+        self.message_user(request, f"Successfully rejected {updated_count} loan(s).")
 
 @admin.register(LoanGuarantor)
 class LoanGuarantorAdmin(admin.ModelAdmin):
