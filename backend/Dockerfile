@@ -18,11 +18,10 @@ COPY requirements.txt /app/
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 
-# ✅ 1. COPY THE PROJECT FILES FIRST
+# 1. COPY THE PROJECT FILES
 COPY . /app/
 
-# ✅ 2. THEN RUN COLLECTSTATIC (It needs manage.py and your settings to exist)
-# We inject a fake SQLite database URL so Django doesn't try to connect to Postgres during the build
-RUN SECRET_KEY=dummy-key-for-build DATABASE_URL=sqlite:////tmp/dummy.db python manage.py collectstatic --noinput
+# 2. THE FIX: We removed the failing RUN collectstatic line entirely!
 
-CMD ["sh", "-c", "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT"]
+# 3. THE BOOT COMMAND: Collect CSS, run migrations, and start the server
+CMD ["sh", "-c", "python manage.py collectstatic --noinput && python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT"]
