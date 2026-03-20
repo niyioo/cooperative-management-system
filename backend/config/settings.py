@@ -115,7 +115,7 @@ STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Tell WhiteNoise to compress and cache the files for speed
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
 # ✅ ADD THIS LINE: Tells WhiteNoise NOT to crash if Jazzmin is missing a random font file
 WHITENOISE_MANIFEST_STRICT = False
