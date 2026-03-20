@@ -104,7 +104,12 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = 'static/'
-STATIC_ROOT = BASE_DIR / 'static'
+
+# ✅ Where Django will collect all the CSS files
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+# ✅ Tell WhiteNoise to compress and cache the files for speed
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
