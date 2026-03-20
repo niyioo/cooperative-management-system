@@ -11,7 +11,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv('SECRET_KEY', 'unsafe-fallback-key')
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
+
+# ✅ FIX 1: Bulletproof ALLOWED_HOSTS parsing (allows '*' to prevent Render 400 errors during deployment)
+allowed_hosts_env = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,*')
+ALLOWED_HOSTS = [host.strip() for host in allowed_hosts_env.split(',') if host.strip()]
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -25,6 +28,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
+    'simple_history',
     
     # Local Apps
     'apps.core',
@@ -36,7 +40,6 @@ INSTALLED_APPS = [
     'apps.contributions',
     'apps.finance',
     'apps.reports',
-    'simple_history',
 ]
 
 MIDDLEWARE = [
@@ -49,6 +52,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # ✅ FIX 2: Added Simple History Middleware so it tracks WHO made the change
+    'simple_history.middleware.HistoryRequestMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -77,7 +82,7 @@ DATABASES = {
         'NAME': os.getenv('DB_NAME', 'cooperative_db'),
         'USER': os.getenv('DB_USER', 'coop_user'),
         'PASSWORD': os.getenv('DB_PASSWORD', 'Coop@12345'),
-        'HOST': os.getenv('DB_HOST', 'localhost'),  # Will become 'db' in Docker
+        'HOST': os.getenv('DB_HOST', 'localhost'),
         'PORT': os.getenv('DB_PORT', '5432'),
     }
 }
@@ -105,10 +110,10 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
-# ✅ Where Django will collect all the CSS files
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+# ✅ FIX 3: Consistent Path formatting
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# ✅ Tell WhiteNoise to compress and cache the files for speed
+# Tell WhiteNoise to compress and cache the files for speed
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 MEDIA_URL = 'media/'

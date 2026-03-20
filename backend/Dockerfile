@@ -18,7 +18,10 @@ COPY requirements.txt /app/
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 
-# Copy project
+# ✅ 1. COPY THE PROJECT FILES FIRST
 COPY . /app/
+
+# ✅ 2. THEN RUN COLLECTSTATIC (It needs manage.py and your settings to exist)
+RUN SECRET_KEY=dummy-key-for-build python manage.py collectstatic --noinput
 
 CMD ["sh", "-c", "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT"]
