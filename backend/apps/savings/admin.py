@@ -3,15 +3,17 @@ from .models import SavingsAccount, SavingsTransaction
 
 @admin.register(SavingsAccount)
 class SavingsAccountAdmin(admin.ModelAdmin):
-    list_display = ('account_number', 'member_name', 'balance', 'updated_at')
-    search_fields = ('account_number', 'member__membership_id', 'member__first_name')
-    readonly_fields = ('balance', 'account_number') # Keep balance read-only to prevent manual hacks
-
-    def member_name(self, obj):
-        return f"{obj.member.first_name} {obj.member.last_name}"
+    list_display = ('member', 'account_number', 'balance', 'last_updated')
+    search_fields = ('account_number', 'member__first_name', 'member__last_name', 'member__membership_id')
+    readonly_fields = ('balance', 'account_number') # Protect the money and ID!
 
 @admin.register(SavingsTransaction)
 class SavingsTransactionAdmin(admin.ModelAdmin):
-    list_display = ('transaction_id', 'account', 'type', 'amount', 'date')
-    list_filter = ('type', 'date')
-    search_fields = ('transaction_id', 'account__account_number')
+    # ✅ Matches your model exactly
+    list_display = ('reference', 'account', 'transaction_type', 'amount', 'status', 'created_at')
+    
+    # ✅ Side-filters
+    list_filter = ('status', 'transaction_type', 'created_at')
+    
+    search_fields = ('reference', 'account__account_number', 'account__member__first_name')
+    readonly_fields = ('reference',)

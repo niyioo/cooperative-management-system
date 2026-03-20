@@ -1,29 +1,28 @@
 from django.contrib import admin
-from .models import Loan, LoanProduct
+from .models import LoanProduct, Loan, LoanGuarantor, LoanRepayment
 
 @admin.register(LoanProduct)
 class LoanProductAdmin(admin.ModelAdmin):
     list_display = ('name', 'interest_rate', 'max_amount', 'max_duration_months', 'is_active')
-    list_editable = ('is_active',)
+    list_filter = ('is_active',)
+    search_fields = ('name',)
 
 @admin.register(Loan)
 class LoanAdmin(admin.ModelAdmin):
-    list_display = ('loan_id', 'member_name', 'principal', 'status', 'balance_remaining', 'created_at')
-    list_filter = ('status', 'loan_product')
-    search_fields = ('loan_id', 'member__first_name', 'member__last_name', 'member__membership_id')
-    
-    # Custom actions to approve/reject right from the list
-    actions = ['approve_loans', 'reject_loans']
+    # ✅ Replaced 'principal' with 'principal_amount' and used 'application_date'
+    list_display = ('loan_id', 'member', 'loan_product', 'principal_amount', 'status', 'application_date')
+    list_filter = ('status', 'loan_product', 'application_date')
+    search_fields = ('loan_id', 'member__membership_id', 'member__first_name', 'member__last_name')
+    readonly_fields = ('loan_id', 'interest_amount', 'total_payable', 'balance_remaining')
 
-    def member_name(self, obj):
-        return f"{obj.member.first_name} {obj.member.last_name}"
+@admin.register(LoanGuarantor)
+class LoanGuarantorAdmin(admin.ModelAdmin):
+    list_display = ('loan', 'guarantor_member', 'amount_guaranteed', 'status')
+    list_filter = ('status',)
+    search_fields = ('loan__loan_id', 'guarantor_member__membership_id')
 
-    @admin.action(description='Approve selected loan applications')
-    def approve_loans(self, request, queryset):
-        queryset.update(status='APPROVED')
-        self.message_user(request, "Selected loans have been approved.")
-
-    @admin.action(description='Reject selected loan applications')
-    def reject_loans(self, request, queryset):
-        queryset.update(status='REJECTED')
-        self.message_user(request, "Selected loans have been rejected.")
+@admin.register(LoanRepayment)
+class LoanRepaymentAdmin(admin.ModelAdmin):
+    list_display = ('receipt_reference', 'loan', 'amount_paid', 'payment_date')
+    search_fields = ('receipt_reference', 'loan__loan_id')
+    readonly_fields = ('payment_date',)

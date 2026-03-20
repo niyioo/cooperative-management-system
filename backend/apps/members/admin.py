@@ -1,26 +1,21 @@
 from django.contrib import admin
-from .models import Member
+from .models import Member, NextOfKin, MemberDocument
 
 @admin.register(Member)
 class MemberAdmin(admin.ModelAdmin):
-    # What you see in the table list
-    list_display = ('membership_id', 'user_email', 'full_name', 'status', 'joined_date')
+    # ✅ Replaced joined_date with created_at
+    list_display = ('membership_id', 'first_name', 'last_name', 'phone_number', 'status', 'created_at')
     list_filter = ('status', 'created_at')
-    search_fields = ('membership_id', 'user__email', 'first_name', 'last_name')
-    readonly_fields = ('membership_id', 'created_at', 'updated_at')
+    search_fields = ('membership_id', 'first_name', 'last_name', 'phone_number', 'user__email')
+    readonly_fields = ('membership_id',)
 
-    def user_email(self, obj):
-        return obj.user.email
-    user_email.short_description = 'Email'
+@admin.register(NextOfKin)
+class NextOfKinAdmin(admin.ModelAdmin):
+    list_display = ('full_name', 'member', 'relationship', 'phone_number')
+    search_fields = ('full_name', 'member__membership_id')
 
-    def full_name(self, obj):
-        return f"{obj.first_name} {obj.last_name}"
-    full_name.short_description = 'Name'
-
-    # Organize the edit page
-    fieldsets = (
-        ('Identification', {'fields': ('membership_id', 'user')}),
-        ('Personal Details', {'fields': ('first_name', 'last_name', 'phone_number')}),
-        ('Status & Verification', {'fields': ('status',)}),
-        ('Timestamps', {'fields': ('created_at', 'updated_at')}),
-    )
+@admin.register(MemberDocument)
+class MemberDocumentAdmin(admin.ModelAdmin):
+    list_display = ('document_type', 'member', 'is_verified', 'uploaded_at')
+    list_filter = ('document_type', 'is_verified')
+    search_fields = ('member__membership_id',)
