@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     'apps.contributions',
     'apps.finance',
     'apps.reports',
+    'simple_history',
 ]
 
 MIDDLEWARE = [
