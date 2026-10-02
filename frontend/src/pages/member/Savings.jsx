@@ -1,26 +1,32 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Info, TreePine } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { CalendarClock, Info, TreePine } from 'lucide-react';
 import { memberApi } from '../../api/member';
-import { Alert } from '../../components/ui/Alert';
+import ContributionHistory from '../../components/savings/ContributionHistory';
+import { Alert, ErrorAlert } from '../../components/ui/Alert';
 import { StatusBadge } from '../../components/ui/Badge';
 import { Card, CardBody, CardHeader } from '../../components/ui/Card';
+import Button from '../../components/ui/Button';
 import EmptyState from '../../components/ui/EmptyState';
+import Modal from '../../components/ui/Modal';
 import PageHeader from '../../components/ui/PageHeader';
 import Pagination from '../../components/ui/Pagination';
 import QueryState from '../../components/ui/QueryState';
-import { SelectField } from '../../components/ui/Field';
+import { SelectField, TextField } from '../../components/ui/Field';
 import { Money, Table, Td, Th } from '../../components/ui/Table';
-import { formatDate, formatNaira, monthLabel } from '../../lib/format';
+import { applyFieldErrors } from '../../lib/errors';
+import { formatDate, formatNaira, formatPeriod, monthLabel } from '../../lib/format';
 
 export default function Savings() {
   const savings = useQuery({ queryKey: ['me', 'savings'], queryFn: memberApi.savings });
   return (
     <div className="space-y-6">
-      <PageHeader title="My Savings" description="Your Christmas Savings and other savings, kept separately." />
+      <PageHeader title="My Savings" description="Your monthly contribution, Christmas Savings and other savings, kept separately." />
       <Alert tone="info">
         Savings are shown for your information. Withdrawals are not available through the portal; speak to the cooperative office about your savings.
       </Alert>
+      <MonthlyContribution />
       <ChristmasSavings />
       <QueryState query={savings}>
         {(data) => (
@@ -39,6 +45,110 @@ export default function Savings() {
         )}
       </QueryState>
     </div>
+  );
+}
+
+function MonthlyContribution() {
+  const query = useQuery({ queryKey: ['me', 'monthly-contribution'], queryFn: memberApi.monthlyContribution, retry: false });
+  const [showHistory, setShowHistory] = useState(false);
+  if (query.isError && query.error?.response?.status === 404) return null;
+
+  return (
+    <QueryState query={query}>
+      {(data) => {
+        const behind = Number(data.arrears) > 0;
+        return (
+          <Card>
+            <CardHeader
+              title="Monthly contribution"
+              description={`Deducted from your pay each month into ${data.product} (account ${data.account_number})`}
+              action={data.tracked && <ChangeMonthlyContribution data={data} />}
+            />
+            <CardBody className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">This month</p>
+                  <p className="tabular mt-1 text-2xl font-bold text-slate-900">{formatNaira(data.amount)}</p>
+                  <p className="text-xs text-slate-500">Minimum {formatNaira(data.minimum)}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Arrears</p>
+                  <p className={`tabular mt-1 text-2xl font-bold ${behind ? 'text-red-700' : 'text-emerald-700'}`}>{behind ? formatNaira(data.arrears) : 'None'}</p>
+                  <p className="text-xs text-slate-500">
+                    {behind ? `About ${data.months_behind} month${data.months_behind === 1 ? '' : 's'} behind` : 'You are up to date'} · since {formatPeriod(data.tracked_from)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Paid since {formatPeriod(data.tracked_from)}</p>
+                  <p className="tabular mt-1 text-2xl font-bold text-slate-900">{formatNaira(data.paid_total)}</p>
+                  <p className="text-xs text-slate-500">of {formatNaira(data.expected_total)} expected</p>
+                </div>
+              </div>
+              {data.pending_change && (
+                <Alert tone="info">
+                  Your monthly contribution changes to <strong>{formatNaira(data.pending_change.amount)}</strong> from {formatPeriod(data.pending_change.effective_from)}.
+                </Alert>
+              )}
+              {behind && (
+                <Alert tone="warning">
+                  Your contributions are {formatNaira(data.arrears)} short. The cooperative may add arrears to a coming payroll deduction; speak to the cooperative office if this looks wrong.
+                </Alert>
+              )}
+              <button type="button" className="text-sm font-medium text-brand-600 hover:underline" onClick={() => setShowHistory(!showHistory)} aria-expanded={showHistory}>
+                {showHistory ? 'Hide month by month' : 'Show month by month'}
+              </button>
+            </CardBody>
+            {showHistory && <ContributionHistory history={data.history} caption="Monthly contribution, month by month" />}
+          </Card>
+        );
+      }}
+    </QueryState>
+  );
+}
+
+function ChangeMonthlyContribution({ data }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const { register, handleSubmit, setError, reset, formState: { errors } } = useForm({ defaultValues: { amount: '' } });
+  const mutation = useMutation({
+    mutationFn: (values) => memberApi.changeMonthlyContribution(values.amount),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['me'] });
+      setOpen(false);
+    },
+    onError: (error) => applyFieldErrors(error, setError),
+  });
+  const submit = handleSubmit((values) => mutation.mutate(values));
+
+  return (
+    <>
+      <Button size="sm" variant="secondary" icon={CalendarClock} onClick={() => { mutation.reset(); reset({ amount: '' }); setOpen(true); }}>
+        Change amount
+      </Button>
+      <Modal open={open} onClose={() => setOpen(false)} title="Change your monthly contribution"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button loading={mutation.isPending} onClick={submit}>Save new amount</Button>
+          </>
+        }>
+        <form className="space-y-4" onSubmit={submit} noValidate>
+          <ErrorAlert error={mutation.error} />
+          <p>
+            You now contribute <strong>{formatNaira(data.pending_change?.amount ?? data.amount)}</strong> a month. A new amount applies from next month,
+            because this month&apos;s deduction may already be with payroll.
+          </p>
+          <TextField label="New monthly amount (₦)" required inputMode="decimal" autoFocus
+            hint={`At least ${formatNaira(data.minimum)}.`}
+            {...register('amount', {
+              required: 'Enter an amount.',
+              validate: (v) => Number(v) >= Number(data.minimum) || `The minimum is ${formatNaira(data.minimum)}.`,
+            })}
+            error={errors.amount?.message} />
+          <button type="submit" className="hidden" aria-hidden="true" tabIndex={-1} />
+        </form>
+      </Modal>
+    </>
   );
 }
 

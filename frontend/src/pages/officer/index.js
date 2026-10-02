@@ -18,5 +18,6 @@ export { default as MemberImports } from './members/MemberImports';
 export { default as MemberList } from './members/MemberList';
 export { SavingsAccountDetail, SavingsAccounts, SavingsLayout } from './savings/SavingsAccounts';
 export { SavingsCycleDetail, SavingsCycles, SavingsProducts } from './savings/SavingsCycles';
+export { MonthlyDeductions } from './savings/MonthlyDeductions';
 export { CooperativeSettings, Departments, Officers, Roles, SettingsIndex, SettingsLayout } from './settings/Settings';
 export { BatchDetail, Batches, Ledger, PendingEntries, TransactionsLayout } from './transactions/Transactions';

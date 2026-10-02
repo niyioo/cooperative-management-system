@@ -12,13 +12,13 @@ The design, data model, business rules and API are specified in **[docs/ARCHITEC
 | Area | What it does |
 |---|---|
 | Members | Registration (one at a time or spreadsheet import with a dry-run report), profiles, next of kin, documents and photo, status workflow (activate, suspend, reinstate, deactivate), portal invitations |
-| Savings | Regular savings products and **Christmas Savings** cycles (January–October, paid out after closing), single contributions, payroll batch uploads, the month-by-month Christmas grid |
+| Savings | **Monthly statutory contribution** into Regular Savings (member-chosen amount above a minimum, arrears tracking, monthly payroll/IPPIS deduction schedule that uploads straight back as a batch), regular savings products and **Christmas Savings** cycles (January–October, paid out after closing), single contributions, payroll batch uploads, the month-by-month Christmas grid |
 | Loans | Products with flat or reducing-balance interest, eligibility checks, member applications with documents and **guarantors chosen by membership number** (asked by e-mail and in the portal; they accept or decline under *Guarantees*), review → approval → disbursement, schedules, repayments (single or payroll batch), overdue tracking, default |
 | Investments | Products, member accounts, contributions, liquidations, yearly scheme returns |
 | Dividends | December cycles: calculate (closing, average or minimum balance), recalculate, approve, publish to members, pay to savings or externally |
 | Ledger | One append-only ledger; balances are always derived from it. Maker–checker approvals, reversals, adjustments, batch uploads with validation reports |
 | Account closure | Member request → review → approval (settlement statement frozen) → execution as a settlement batch approved by a second officer. Records are never deleted |
-| Reports | 12 reports (membership, savings, Christmas grid, loans, repayments, overdue, investments, dividends, transactions, financial summary, member statement, closures) on screen, in Excel and PDF; exports are audited |
+| Reports | 13 reports (membership, savings, contribution arrears, Christmas grid, loans, repayments, overdue, investments, dividends, transactions, financial summary, member statement, closures) on screen, in Excel and PDF; exports are audited |
 | Notifications | Automatic member notifications (loan decisions, disbursement, closure steps, dividends, payouts), officer messages to members, announcements for members or officers |
 | Administration | Officers and roles (editable permission matrix), cooperative settings, departments, audit log |
 
@@ -124,7 +124,7 @@ Sign in with that account, then add the other officers under **Settings › Offi
 ## Running the tests
 
 ```bash
-cd backend && pytest                      # 836 tests, including the access-control sweep
+cd backend && pytest                      # 886 tests, including the access-control sweep
 cd backend && pytest --cov=apps           # with coverage (currently 95%)
 cd frontend && npm test                   # Vitest unit tests
 cd frontend && npm run lint               # ESLint, zero warnings allowed
@@ -135,6 +135,7 @@ The backend tests need PostgreSQL (the schema uses PostgreSQL triggers and const
 ## Key rules the system enforces
 
 - Members can view savings but **cannot withdraw** them through the portal.
+- **Every member contributes monthly** into Regular Savings through payroll: an amount they choose, not below the cooperative's minimum. Shortfalls are tracked as arrears.
 - **Christmas Savings** runs January–October and is tracked separately from other savings.
 - **Loans need officer approval**: review, decision and disbursement are separate steps with separate permissions.
 - **Every loan needs a guarantor**: a fellow member, named by membership number, who must accept before the loan can be approved.
@@ -143,4 +144,4 @@ The backend tests need PostgreSQL (the schema uses PostgreSQL triggers and const
 - **Every financial operation is auditable**: posted ledger entries are immutable (corrections are reversals), approvals need a second officer, and every action is in the audit log.
 - **Members see only their own data**, and officers act only within their role's permissions.
 
-The full list (BR-01 to BR-28), with where each rule is enforced, is in [docs/ARCHITECTURE.md §10](docs/ARCHITECTURE.md#10-business-rules).
+The full list (BR-01 to BR-29), with where each rule is enforced, is in [docs/ARCHITECTURE.md §10](docs/ARCHITECTURE.md#10-business-rules).

@@ -13,6 +13,8 @@ export const memberApi = {
   savings: () => get('/me/savings/'),
   christmas: (year) => get('/me/savings/christmas/', year ? { year } : undefined),
   savingsTransactions: (accountId, page = 1) => get(`/me/savings/accounts/${accountId}/transactions/`, { page }),
+  monthlyContribution: () => get('/me/savings/monthly-contribution/'),
+  changeMonthlyContribution: (amount) => post('/me/savings/monthly-contribution/', { amount }),
 
   loanProducts: () => get('/me/loan-products/'),
   loanQuote: (productId, amount, termMonths) => get(`/me/loan-products/${productId}/quote/`, { amount, term_months: termMonths }),

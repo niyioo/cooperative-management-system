@@ -225,6 +225,35 @@ class SavingsAccount(TimeStampedModel):
         super().save(*args, **kwargs)
 
 
+class MonthlyContributionChange(TimeStampedModel):
+    """
+    The member's statutory monthly contribution (BR-29): what is deducted from
+    pay each month into the mandatory regular savings product. Each row applies
+    from `effective_from` until the next one; months before the first row use
+    the product minimum. Kept as history so arrears are judged against the
+    amount that applied in each month.
+    """
+
+    account = models.ForeignKey(SavingsAccount, on_delete=models.PROTECT, related_name="contribution_changes")
+    amount = MoneyField()
+    effective_from = models.DateField(help_text="First day of the first month this amount applies to.")
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    reason = models.CharField(max_length=255, blank=True)
+
+    class Meta(TimeStampedModel.Meta):
+        ordering = ["account", "-effective_from"]
+        constraints = [
+            models.UniqueConstraint(fields=["account", "effective_from"], name="contribution_change_one_per_month"),
+            models.CheckConstraint(condition=Q(effective_from__day=1), name="contribution_change_starts_a_month"),
+            models.CheckConstraint(condition=Q(amount__gte=0), name="contribution_change_amount_not_negative"),
+        ]
+
+    def __str__(self):
+        return f"{self.account.account_number}: {self.amount} from {self.effective_from:%b %Y}"
+
+
 class SavingsTransactionManager(models.Manager.from_queryset(TransactionQuerySet)):
     def get_queryset(self):
         return super().get_queryset().filter(savings_account__isnull=False)

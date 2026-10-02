@@ -53,6 +53,8 @@ export const adminApi = {
   savingsAccounts: resource('/admin/savings/accounts/'),
   contribute: (data) => post('/admin/savings/contributions/', data),
   withdraw: (data) => post('/admin/savings/withdrawals/', data),
+  deductionSchedule: (params) => get('/admin/savings/deduction-schedule/', params),
+  downloadDeductionSchedule: (params) => blob('/admin/savings/deduction-schedule/download/', params),
 
   loanProducts: resource('/admin/loans/products/'),
   loanApplications: {

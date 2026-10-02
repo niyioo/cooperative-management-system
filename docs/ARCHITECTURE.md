@@ -315,6 +315,7 @@ Conventions for every table:
 - **Closure:** `closure_disables_portal_login` (True)
 - **Maker–checker:** `maker_checker_types` (array of transaction types that require approval)
 - **Loans:** `loan_overdue_grace_days` (e.g. 7)
+- **Monthly contribution:** `contributions_tracked_from` (first month arrears are counted from; blank means from each account's opening)
 - **Security:** `session_idle_timeout_minutes`
 
 **Department**: `name` (unique), `code`, `is_active`. The configurable list of EMDI departments and units.
@@ -379,6 +380,12 @@ Unique `(product, year)`.
   - Unique `(member, cycle) WHERE cycle IS NOT NULL`
   - `CHECK (cycle IS NULL) = (product.kind = 'REGULAR')`. This is enforced in the service, because a CHECK can't read another table.
 - **Balance** = Σ posted credits − Σ posted debits on the ledger.
+
+**MonthlyContributionChange** (BR-29)
+
+- Fields: `account` (the statutory Regular Savings account), `amount`, `effective_from` (first day of a month), `changed_by`, `reason`.
+- Constraints: unique `(account, effective_from)`; `effective_from` is the 1st; `amount >= 0`.
+- The amount that applies in a month is the latest row on or before it, else the product's `min_contribution`. `SavingsAccount.elected_monthly_amount` mirrors the latest amount chosen.
 
 **SavingsTransaction**: proxy of `ledger.Transaction` where `savings_account IS NOT NULL`.
 
@@ -715,6 +722,16 @@ UPCOMING ─open (Jan)─▶ OPEN ─close (after Oct)─▶ CLOSED ─payout─
 - **Close:** blocked while any contribution in the cycle is awaiting approval.
 - **Payout** (Q5): `cycles/{id}/payout/` builds a `CYCLE_PAYOUTS` batch with one `SAVINGS_CYCLE_PAYOUT` per account holding a balance. A second officer approves it. Approval re-checks that every balance still matches, then posts, marks the cycle `PAID_OUT` and closes its accounts. The grid keeps showing the contributions, with the payout in its own column.
 
+### 6.3.1 Statutory monthly contribution (BR-29)
+
+Every member has a monthly amount deducted from pay into the **statutory product**: the active, mandatory `REGULAR` savings product (Regular Savings for EMDI). Its `min_contribution` is the minimum monthly amount. Logic lives in `savings/statutory.py`.
+
+- **Choosing the amount:** the member picks it (`/me/savings/monthly-contribution/`), at least the minimum. A member's change applies **from next month**, because this month's deduction may already be with payroll. An officer with `post_savings_contribution` may change it from **this month or any later month**, with a reason; the member is notified in the portal and by e-mail. A later change already scheduled is replaced. Every change is audited (`savings.monthly_contribution_changed`).
+- **Raising the minimum** keeps past months at the amounts that applied then (accounts with no history get the old minimum written down from their start) and moves anyone below the new minimum up to it from this month.
+- **Arrears** = Σ expected over the months that are due − Σ posted contributions for those months (`SAVINGS_CONTRIBUTION` net of their reversals, by `period`), never below zero. Months are counted from the latest of `contributions_tracked_from`, the account's `opened_on` and the member's joining month. A month is due once it has ended, or as soon as anything is posted for it. Paying more in one month makes up for a shortfall in another. Frozen accounts and inactive or closed members build no arrears.
+- **Deduction schedule:** `savings/deduction-schedule/?period=YYYY-MM&include_arrears=` lists, for every active member, the monthly amount for that month plus (for the current or a future month) their arrears. Members whose contribution for the month is already recorded or pending are left out. `download/` returns the same as Excel: the first sheet is exactly the `CONTRIBUTIONS` batch layout (membership, staff and IPPIS numbers, name, product code, amount, month, reference `PAYROLL-YYYY-MM`), followed by a breakdown and notes. Payroll deducts, then the same sheet is uploaded as a contributions batch. Downloads are audited.
+- **Seen in:** the member's Savings page and dashboard (amount, scheduled change, arrears, month by month); the officer account page; *Savings › Monthly deductions*; the officer dashboard; the `contribution-arrears` report.
+
 ### 6.4 Account closure
 
 ```
@@ -783,6 +800,7 @@ Base path `/api/v1/`. JSON only. Paginated lists return `{count, next, previous,
 | `savings/` | GET | All accounts grouped: `christmas`, `other`, `total` |
 | `savings/christmas/?year=` | GET | Jan–Oct grid + total for the year |
 | `savings/accounts/{id}/transactions/` | GET | |
+| `savings/monthly-contribution/` | GET, POST (`amount`) | The statutory monthly contribution: amount, minimum, scheduled change, arrears, last 12 months. POST changes it from next month (BR-29) |
 | `loan-products/` · `loan-products/{id}/quote/?amount=&term_months=` | GET | Active products with this member's eligibility; the quote includes eligibility for that amount and term |
 | `loan-applications/` | GET, POST | POST creates a `DRAFT` |
 | `loan-applications/{id}/` | GET, PATCH (draft/returned only) | |
@@ -816,7 +834,8 @@ Every view requires `IsOfficer` plus the permission for that action.
 | `members/imports/` | Upload (multipart) → dry-run report. `{id}/commit/` is all-or-nothing, blocked if any row has errors, and re-checked against the database at commit. `template/` downloads the Excel template. |
 | `departments/` | |
 | `savings/products/` · `savings/cycles/` | `cycles/{id}/open\|close\|payout/`, `cycles/{id}/grid/` (members × months, paginated, `?search=`) |
-| `savings/accounts/` | `{id}/transactions/` |
+| `savings/accounts/` | `{id}/transactions/`, `{id}/monthly-contribution/` (GET with `view_savings`; POST `amount`, `effective_from`, `reason` with `post_savings_contribution`; statutory account only) |
+| `savings/deduction-schedule/` | GET `?period=&include_arrears=`: monthly payroll deductions with arrears (`view_savings`). `download/` is the Excel file in the contributions batch layout (`post_savings_contribution`, audited) |
 | `savings/contributions/` | POST single contribution (posts at once unless `SAVINGS_CONTRIBUTION` is in `maker_checker_types`) |
 | `savings/withdrawals/` | POST officer withdrawal: only for products with `allow_officer_withdrawal` (none for EMDI), maker–checker by default, balance-checked |
 | `loans/products/` | `{id}/quote/?amount=&term_months=` (schedule preview, any officer) |
@@ -847,6 +866,7 @@ Each report is a class in `apps/reports/definitions.py` (engine in `engine.py`, 
 | `members` | `view_member` | status, department, joined from/to |
 | `savings` | `view_savings` | as at, product, department, status |
 | `christmas-savings` | `view_savings` | year, department (months are columns) |
+| `contribution-arrears` | `view_savings` | department (members behind on the monthly contribution, largest first) |
 | `loans` | `view_loans` | as at, status, product, department, disbursed from/to |
 | `loan-repayments` | `view_loans` | from/to, product, department, member |
 | `overdue-loans` | `view_loans` | product, department |
@@ -1035,6 +1055,7 @@ The **Enforced by** column says where each rule is guaranteed. A frontend check 
 | BR-26 | Contributions count toward the month given by `period` (Africa/Lagos) | `CHECK day = 1` + timezone setting |
 | BR-27 | Money uses Decimal and rounds half-up to kobo | `MoneyField` + calculators |
 | BR-28 | Every loan application needs at least one guarantor, chosen by membership number, who must accept before approval. Guarantors are notified in the portal and by e-mail. | `CHECK guarantors_required >= 1` on loan products; submit and approve guards in the loan services; tests in `loans/tests/test_guarantors.py` |
+| BR-29 | Every member makes a statutory monthly contribution into Regular Savings, deducted through payroll: an amount they choose, not below the product minimum (members change it from next month). Shortfalls are tracked as arrears, and a monthly deduction schedule is produced for payroll. | `savings/statutory.py` (history in `MonthlyContributionChange`); deduction schedule in the contributions batch layout; tests in `savings/tests/test_monthly_contribution.py` |
 
 ---
 

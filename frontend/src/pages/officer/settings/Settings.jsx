@@ -47,10 +47,13 @@ export function SettingsIndex() {
   return <Navigate to="roles" replace />;
 }
 
+/** The API stores the arrears start as a date; the form edits it as a month. */
+const toForm = (settings) => ({ ...settings, contributions_tracked_from: settings.contributions_tracked_from?.slice(0, 7) || '' });
+
 function CooperativeForm({ settings }) {
   const queryClient = useQueryClient();
   const [saved, setSaved] = useState(false);
-  const { register, handleSubmit, setError, formState: { errors, isDirty }, reset } = useForm({ defaultValues: settings });
+  const { register, handleSubmit, setError, formState: { errors, isDirty }, reset } = useForm({ defaultValues: toForm(settings) });
   const mutation = useMutation({
     mutationFn: ({ updated_at, ...data }) => adminApi.settings.update({
       ...data,
@@ -59,9 +62,10 @@ function CooperativeForm({ settings }) {
       loan_overdue_grace_days: Number(data.loan_overdue_grace_days),
       session_idle_timeout_minutes: Number(data.session_idle_timeout_minutes),
       maker_checker_types: [].concat(data.maker_checker_types || []),
+      contributions_tracked_from: data.contributions_tracked_from ? `${data.contributions_tracked_from}-01` : null,
     }),
     onSuccess: (data) => {
-      reset(data);
+      reset(toForm(data));
       setSaved(true);
       queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] });
     },
@@ -92,6 +96,8 @@ function CooperativeForm({ settings }) {
           <SelectField label="Financial year starts" {...register('financial_year_start_month')} error={err('financial_year_start_month')}>{options(MONTHS)}</SelectField>
           <SelectField label="Dividends processed in" {...register('dividend_processing_month')} error={err('dividend_processing_month')}>{options(MONTHS)}</SelectField>
           <TextField label="Loan overdue grace (days)" type="number" {...register('loan_overdue_grace_days')} error={err('loan_overdue_grace_days')} />
+          <TextField label="Count monthly contribution arrears from" type="month" {...register('contributions_tracked_from')} error={err('contributions_tracked_from')}
+            hint="Leave blank to count from when each member's savings account was opened." />
           <TextField label="Sign out after inactivity (minutes)" type="number" {...register('session_idle_timeout_minutes')} error={err('session_idle_timeout_minutes')} />
           <div className="space-y-2 sm:col-span-2">
             <CheckboxField label="Members may request savings withdrawals (only on products that allow it)" {...register('member_withdrawal_requests_enabled')} />

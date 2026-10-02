@@ -13,8 +13,10 @@ from apps.ledger.choices import TransactionStatus
 from apps.ledger.models import Transaction
 from apps.ledger.serializers import TransactionSerializer
 
+from .. import statutory
 from ..models import ProductKind, SavingsAccount
 from ..selectors import cycle_grid, member_savings_position
+from ..serializers import MyMonthlyContributionSerializer
 
 
 class MySavingsView(MemberAPIMixin, APIView):
@@ -70,3 +72,25 @@ class MySavingsTransactionsView(MemberAPIMixin, ListAPIView):
             .select_related("savings_account__product", "savings_account__cycle")
             .order_by("-value_date", "-created_at")
         )
+
+
+class MyMonthlyContributionView(MemberAPIMixin, APIView):
+    """The member's statutory monthly contribution: view it, or change it from next month (BR-29)."""
+
+    def _account(self):
+        account = statutory.statutory_account(self.member)
+        if account is None:
+            raise NotFound("You have no monthly contribution account.")
+        return account
+
+    @extend_schema(responses={200: OpenApiResponse(description="Monthly amount, minimum, scheduled change, arrears and history")})
+    def get(self, request):
+        return Response(money_to_str(statutory.position(self._account())))
+
+    @extend_schema(request=MyMonthlyContributionSerializer, responses={200: OpenApiResponse(description="The updated position")})
+    def post(self, request):
+        serializer = MyMonthlyContributionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        account = self._account()
+        statutory.set_monthly_contribution(request.user, account, amount=serializer.validated_data["amount"], by_member=True)
+        return Response(money_to_str(statutory.position(account)))

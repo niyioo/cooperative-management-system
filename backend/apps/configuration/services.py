@@ -61,6 +61,7 @@ SETTINGS_FIELDS = [
     "closure_disables_portal_login",
     "maker_checker_types",
     "loan_overdue_grace_days",
+    "contributions_tracked_from",
     "session_idle_timeout_minutes",
 ]
 
@@ -84,6 +85,8 @@ def _validate_settings(data):
 def update_settings(actor, **data):
     require_perm(actor, P.MANAGE_SETTINGS)
     _validate_settings(data)
+    if data.get("contributions_tracked_from"):
+        data["contributions_tracked_from"] = data["contributions_tracked_from"].replace(day=1)  # a month
     settings_row = CooperativeSettings.objects.select_for_update().get(pk=CooperativeSettings.load().pk)
     changes = {}
     for field in SETTINGS_FIELDS:

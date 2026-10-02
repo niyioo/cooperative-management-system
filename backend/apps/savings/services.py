@@ -18,7 +18,8 @@ from apps.ledger.models import Transaction, TransactionBatch
 from apps.ledger.selectors import with_balance
 from apps.members.models import Member, MemberStatus
 
-from .models import ProductKind, SavingsAccount, SavingsCycle, SavingsProduct
+from . import statutory
+from .models import MonthlyContributionChange, ProductKind, SavingsAccount, SavingsCycle, SavingsProduct
 from .rules import contribution_problems, eligibility_problem, month_end, month_start, resolve_account
 
 PRODUCT_FIELDS = [
@@ -102,10 +103,13 @@ def update_product(actor, product, **data):
     merged = {f: data.get(f, getattr(product, f)) for f in PRODUCT_FIELDS}
     _validate_product(merged)
     _assert_unique_product(merged["name"], merged["code"], exclude_pk=product.pk)
+    old_minimum = product.min_contribution
     changes = _diff_and_apply(product, merged, PRODUCT_FIELDS)
     if changes:
         product.save()
         record("savings.product_updated", actor=actor, obj=product, changes=changes)
+        if "min_contribution" in changes:
+            statutory.minimum_changed(actor, product, old_minimum)
     return product
 
 
@@ -264,8 +268,23 @@ def open_account(actor, *, member, product, year=None, elected_monthly_amount=No
         account, _ = resolve_account(member, product, None)
     if not account._state.adding:  # UUID pks are set before saving, so check the saved state
         raise DomainError(f"{member.full_name} already has this account ({account.account_number}).", code="account_exists")
+    if elected_monthly_amount is not None and statutory.is_statutory(account):
+        if elected_monthly_amount < product.min_contribution:
+            _field_error(
+                "elected_monthly_amount",
+                f"The minimum monthly contribution is ₦{product.min_contribution:,.2f}.",
+                "below_minimum",
+            )
     account.elected_monthly_amount = elected_monthly_amount
     account.save()
+    if elected_monthly_amount and statutory.is_statutory(account):
+        MonthlyContributionChange.objects.create(
+            account=account,
+            amount=elected_monthly_amount,
+            effective_from=month_start(account.opened_on),
+            changed_by=actor,
+            reason="Chosen when the account was opened",
+        )
     record("savings.account_opened", actor=actor, obj=account, metadata={"member": member.membership_number})
     return account
 
@@ -278,6 +297,14 @@ def update_account(actor, account, **data):
         raise DomainError("This account is closed.", code="account_closed")
     if data.get("status") not in (None, SavingsAccount.Status.ACTIVE, SavingsAccount.Status.FROZEN):
         _field_error("status", "Accounts can only be set to Active or Frozen here.", "invalid_status")
+    if "elected_monthly_amount" in data and statutory.is_statutory(account):
+        # The statutory amount has a history (it judges arrears), so it changes from this month on.
+        amount = data.pop("elected_monthly_amount")
+        if amount is None:
+            _field_error("elected_monthly_amount", "The monthly contribution cannot be blank.", "amount_required")
+        if amount != statutory.position(account)["amount"]:
+            statutory.set_monthly_contribution(actor, account, amount=amount)
+            account.refresh_from_db()
     changes = _diff_and_apply(account, data, ["elected_monthly_amount", "status"])
     if changes:
         account.save()

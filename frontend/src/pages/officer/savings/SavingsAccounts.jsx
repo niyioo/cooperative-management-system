@@ -23,6 +23,7 @@ import { Money } from '../../../components/ui/Table';
 import { SAVINGS_ACCOUNT_STATUS, currentPeriod, today } from '../../../lib/choices';
 import { formatDate, formatNaira, formatPeriod } from '../../../lib/format';
 import { P, useCan } from '../../../lib/permissions';
+import { MonthlyContributionPanel } from './MonthlyDeductions';
 
 export function SavingsLayout() {
   const can = useCan();
@@ -31,6 +32,7 @@ export function SavingsLayout() {
       <PageHeader title="Savings" description="Christmas Savings (January–October) is kept separate from other savings. Members cannot withdraw through the portal." />
       <Tabs tabs={[
         { to: '/admin/savings', label: 'Accounts', end: true },
+        { to: '/admin/savings/deductions', label: 'Monthly deductions' },
         { to: '/admin/savings/cycles', label: 'Christmas Savings cycles' },
         { to: '/admin/savings/products', label: 'Products', show: can(P.MANAGE_SAVINGS_PRODUCTS) },
       ]} />
@@ -169,9 +171,10 @@ export function SavingsAccountDetail() {
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
               <StatCard label="Balance" value={formatNaira(a.balance)} tone="green" />
-              <StatCard label="Monthly amount" value={formatNaira(a.elected_monthly_amount)} hint={a.elected_monthly_amount ? 'Elected by the member' : 'Product default applies'} tone="slate" />
+              <StatCard label="Elected monthly amount" value={formatNaira(a.elected_monthly_amount)} hint={a.elected_monthly_amount ? 'The latest amount chosen' : 'Product default applies'} tone="slate" />
               <Card><CardBody><DetailList columns={1} items={[['Opened', formatDate(a.opened_on)], ['Closed', formatDate(a.closed_on)]]} /></CardBody></Card>
             </div>
+            <MonthlyContributionPanel account={a} />
             <DataTable title="Transactions" query={history.query} page={history.page} onPage={history.setPage} empty="No transactions yet."
               columns={[
                 { header: 'Date', cell: (t) => <span className="whitespace-nowrap">{formatDate(t.value_date)}</span> },

@@ -19,6 +19,7 @@ export default function Dashboard() {
 function DashboardView({ data }) {
   const { member, summary, upcoming_repayment: upcoming, loan_applications: applications, recent_transactions: recent } = data;
   const dividend = summary.latest_dividend;
+  const monthly = data.monthly_contribution;
 
   return (
     <div className="space-y-6">
@@ -42,9 +43,17 @@ function DashboardView({ data }) {
         </Alert>
       )}
 
+      {monthly && Number(monthly.arrears) > 0 && (
+        <Alert tone="warning" title="Monthly contribution in arrears">
+          Your monthly contributions are {formatNaira(monthly.arrears)} short (about {monthly.months_behind} month{monthly.months_behind === 1 ? '' : 's'}).{' '}
+          <Link to="/member/savings" className="font-semibold underline">See month by month</Link>
+        </Alert>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label={`Christmas Savings ${summary.christmas_year}`} value={formatNaira(summary.christmas_savings)} icon={TreePine} tone="green" hint="January – October" />
-        <StatCard label="Other Savings" value={formatNaira(summary.other_savings)} icon={PiggyBank} />
+        <StatCard label="Other Savings" value={formatNaira(summary.other_savings)} icon={PiggyBank}
+          hint={monthly ? `Monthly contribution ${formatNaira(monthly.amount)}` : undefined} />
         <StatCard label="Total Savings" value={formatNaira(summary.total_savings)} icon={Wallet} tone="slate" />
         <StatCard label="Active Loan" value={formatNaira(summary.active_loan_principal)} icon={HandCoins} tone="amber"
           hint={summary.active_loans ? `${summary.active_loans} running loan${summary.active_loans > 1 ? 's' : ''}` : 'No running loan'} />

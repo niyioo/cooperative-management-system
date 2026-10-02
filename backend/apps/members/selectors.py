@@ -8,6 +8,7 @@ from apps.ledger.serializers import TransactionSerializer
 from apps.loans.models import Loan, LoanApplication
 from apps.loans.selectors import loan_schedule, member_loan_position, next_instalment
 from apps.notifications.selectors import visible_announcements
+from apps.savings import statutory
 from apps.savings.selectors import member_savings_position
 
 def financial_summary(member, viewer):
@@ -26,6 +27,14 @@ def financial_summary(member, viewer):
     if viewer.has_perm(P.VIEW_DIVIDENDS):
         summary["dividends"] = member_dividend_history(member, published_only=False)
     return summary
+
+
+def _monthly_contribution(member):
+    account = statutory.statutory_account(member)
+    if account is None:
+        return None
+    p = statutory.positions([account])[account.pk]
+    return {key: p[key] for key in ("amount", "minimum", "pending_change", "arrears", "months_behind", "tracked")}
 
 
 def member_dashboard(member):
@@ -67,6 +76,7 @@ def member_dashboard(member):
             "latest_dividend": dividends["latest"],
         },
         "upcoming_repayment": upcoming,
+        "monthly_contribution": _monthly_contribution(member),
         "loan_applications": [
             {
                 "id": str(a.pk),

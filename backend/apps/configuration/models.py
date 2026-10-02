@@ -61,6 +61,14 @@ class CooperativeSettings(models.Model):
         help_text="Transaction types that must be approved by a second officer before posting.",
     )
     loan_overdue_grace_days = models.PositiveSmallIntegerField(default=7)
+    contributions_tracked_from = models.DateField(
+        null=True,
+        blank=True,
+        help_text=(
+            "First month that monthly contribution arrears are counted from. Blank counts from "
+            "when each member's savings account was opened."
+        ),
+    )
 
     # Security
     session_idle_timeout_minutes = models.PositiveSmallIntegerField(default=30)

@@ -148,3 +148,20 @@ class WithdrawalSerializer(serializers.Serializer):
     amount = serializers.DecimalField(min_value=Decimal("0.01"), **MONEY)
     reason = serializers.CharField(max_length=255)
     value_date = serializers.DateField(required=False)
+
+
+class MonthlyContributionSerializer(serializers.Serializer):
+    amount = serializers.DecimalField(min_value=Decimal("0.01"), **MONEY)
+    effective_from = PeriodField(
+        required=False, allow_null=True, help_text='First month the amount applies to, e.g. "2026-11". Defaults to this month.'
+    )
+    reason = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
+
+
+class MyMonthlyContributionSerializer(serializers.Serializer):
+    amount = serializers.DecimalField(min_value=Decimal("0.01"), help_text="Applies from next month.", **MONEY)
+
+
+class DeductionScheduleQuerySerializer(serializers.Serializer):
+    period = PeriodField(required=False, allow_null=True, help_text='Payroll month, e.g. "2026-10". Defaults to this month.')
+    include_arrears = serializers.BooleanField(required=False, default=True)

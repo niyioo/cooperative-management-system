@@ -59,6 +59,7 @@ const SavingsLayout = officer('SavingsLayout');
 const SavingsCycleDetail = officer('SavingsCycleDetail');
 const SavingsCycles = officer('SavingsCycles');
 const SavingsProducts = officer('SavingsProducts');
+const MonthlyDeductions = officer('MonthlyDeductions');
 const CooperativeSettings = officer('CooperativeSettings');
 const Departments = officer('Departments');
 const Officers = officer('Officers');
@@ -109,6 +110,7 @@ const officerRoutes = [
         children: [
           { index: true, element: <SavingsAccounts /> },
           { path: 'accounts/:id', element: <SavingsAccountDetail /> },
+          { path: 'deductions', element: <MonthlyDeductions /> },
           { path: 'cycles', element: <SavingsCycles /> },
           { path: 'cycles/:id', element: <SavingsCycleDetail /> },
           { path: 'products', ...guarded(P.MANAGE_SAVINGS_PRODUCTS, [{ index: true, element: <SavingsProducts /> }]) },

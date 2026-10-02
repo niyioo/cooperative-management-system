@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, Briefcase, ChevronRight, Gift, HandCoins, PiggyBank, Users } from 'lucide-react';
+import { AlertTriangle, Briefcase, CalendarX, ChevronRight, Gift, HandCoins, PiggyBank, Users } from 'lucide-react';
 import { adminApi } from '../../api/admin';
 import TrendPanel from '../../components/officer/TrendPanel';
 import { useAuth } from '../../auth/AuthProvider';
@@ -93,6 +93,11 @@ export default function Dashboard() {
                 <StatCard label="Overdue loans" value={d.loans.overdue_count} icon={AlertTriangle} tone={d.loans.overdue_count ? 'amber' : 'slate'}
                   hint={`${formatNaira(d.loans.overdue_amount)} in arrears`} />
               )}
+              {d.savings?.contribution_arrears && (
+                <StatCard label="Contribution arrears" value={formatNaira(d.savings.contribution_arrears.amount)} icon={CalendarX}
+                  tone={d.savings.contribution_arrears.members ? 'amber' : 'slate'}
+                  hint={`${d.savings.contribution_arrears.members} member(s) behind on monthly contributions`} />
+              )}
             </div>
 
             <div className="grid gap-6 lg:grid-cols-3">
@@ -152,6 +157,27 @@ export default function Dashboard() {
                         ))}
                       </ul>
                     ) : <EmptyState title="No overdue loans" />}
+                  </Card>
+                )}
+
+                {d.savings?.contribution_arrears && (
+                  <Card>
+                    <CardHeader title="Behind on monthly contributions" action={<Link to="/admin/savings/deductions" className="text-sm font-semibold text-brand-600 hover:underline">Deductions</Link>} />
+                    {d.savings.contribution_arrears.top.length ? (
+                      <ul className="divide-y divide-slate-100">
+                        {d.savings.contribution_arrears.top.map((o) => (
+                          <li key={o.account_id}>
+                            <Link to={`/admin/savings/accounts/${o.account_id}`} className="flex justify-between gap-3 px-5 py-3 text-sm hover:bg-slate-50">
+                              <span>
+                                <span className="block font-medium text-slate-900">{o.member}</span>
+                                <span className="text-xs text-slate-500">{o.membership_number} · about {o.months_behind} month(s)</span>
+                              </span>
+                              <Money value={o.arrears} className="font-semibold text-red-700" />
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : <EmptyState title="Everyone is up to date" />}
                   </Card>
                 )}
 

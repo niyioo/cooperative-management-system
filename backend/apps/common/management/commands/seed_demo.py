@@ -3,8 +3,8 @@ Load demonstration data for local development and training.
 
     python manage.py seed_demo
 
-Creates officers, members, products, a Christmas Savings cycle with monthly
-contributions, a running loan, investments and a published dividend for last
+Creates officers, members, products, monthly Regular Savings contributions (with
+some arrears), a Christmas Savings cycle with monthly contributions, a running loan, investments and a published dividend for last
 year, all through the normal services so every rule and audit entry applies.
 
 Demo sign-ins (all share DEMO_PASSWORD below; change them if the database is
@@ -41,7 +41,8 @@ from apps.members.models import Member
 from apps.members.services import create_member_record
 from apps.notifications.models import Announcement
 from apps.savings import services as savings
-from apps.savings.models import SavingsAccount, SavingsCycle, SavingsProduct
+from apps.savings import statutory
+from apps.savings.models import MonthlyContributionChange, SavingsAccount, SavingsCycle, SavingsProduct
 
 DEMO_PASSWORD = "Emdi-Demo-2026"
 D = Decimal
@@ -133,6 +134,33 @@ class Command(BaseCommand):
                     continue  # Bayo missed two months
                 savings.post_contribution(accountant, account=account, amount=D("5000"), period=datetime.date(year, month, 1),
                                           value_date=min(datetime.date(year, month, 25), today), description=f"Payroll deduction {datetime.date(year, month, 1):%b %Y}")
+
+        # Monthly statutory contributions into Regular Savings (BR-29): a ₦5,000 minimum,
+        # tracked from January. Ada chose ₦10,000; Bayo missed April and May and Tunde
+        # missed June, so both are in arrears. Zainab has asked for ₦8,000 from next month.
+        # Set directly: as configured before go-live, so there is no history of an earlier minimum to keep.
+        SavingsProduct.objects.filter(pk=regular.pk).update(min_contribution=D("5000"), expected_monthly_contribution=D("5000"))
+        for member in everyone:
+            SavingsAccount.objects.filter(member=member, product=regular).update(opened_on=member.date_joined)
+        coop.contributions_tracked_from = datetime.date(year, 1, 1)
+        coop.save()
+        ada_regular = SavingsAccount.objects.get(member=ada, product=regular)
+        MonthlyContributionChange.objects.create(account=ada_regular, amount=D("10000"), effective_from=datetime.date(year, 1, 1),
+                                                 changed_by=ada.user, reason="Chosen by the member")
+        SavingsAccount.objects.filter(pk=ada_regular.pk).update(elected_monthly_amount=D("10000"))
+        tunde = others[2]
+        for member in everyone:
+            account = SavingsAccount.objects.get(member=member, product=regular)
+            for month in range(1, today.month):
+                if (member == bayo and month in (4, 5)) or (member == tunde and month == 6):
+                    continue
+                period = datetime.date(year, month, 1)
+                savings.post_contribution(accountant, account=account, amount=D("10000") if member == ada else D("5000"), period=period,
+                                          value_date=datetime.date(year, month, 25), description=f"Payroll deduction {period:%b %Y}",
+                                          external_reference=f"PAYROLL-{period:%Y-%m}")
+        zainab = others[1]
+        statutory.set_monthly_contribution(zainab.user, SavingsAccount.objects.get(member=zainab, product=regular),
+                                           amount=D("8000"), by_member=True)
 
         # A running loan for Ada (disbursed in March, repaid monthly since).
         product = LoanProduct.objects.create(

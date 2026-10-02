@@ -2,13 +2,17 @@
 import django_filters
 from django.db.models import Count, OuterRef, Q, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from django.http import HttpResponse
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.permissions import OfficerAPIMixin
+from apps.audit.services import record
+from apps.configuration.models import CooperativeSettings
 from apps.accounts.perms import P
 from apps.common.fields import MoneyField
 from apps.common.serializers import money_to_str
@@ -17,11 +21,13 @@ from apps.ledger.models import Transaction
 from apps.ledger.selectors import SIGNED_AMOUNT, ZERO, with_balance
 from apps.ledger.serializers import BatchSerializer, TransactionSerializer
 
-from .. import services
+from .. import services, statutory
 from ..models import SavingsAccount, SavingsCycle, SavingsProduct
 from ..selectors import cycle_grid
 from ..serializers import (
     ContributionSerializer,
+    DeductionScheduleQuerySerializer,
+    MonthlyContributionSerializer,
     PayoutSerializer,
     SavingsAccountCreateSerializer,
     SavingsAccountSerializer,
@@ -187,6 +193,8 @@ class SavingsAccountViewSet(
         "transactions": (P.VIEW_SAVINGS,),
         "create": (P.POST_SAVINGS_CONTRIBUTION,),
         "partial_update": (P.POST_SAVINGS_CONTRIBUTION,),
+        "monthly_contribution:get": (P.VIEW_SAVINGS,),
+        "monthly_contribution:post": (P.POST_SAVINGS_CONTRIBUTION,),
     }
 
     def get_queryset(self):
@@ -217,6 +225,79 @@ class SavingsAccountViewSet(
         entries = self.get_object().transactions.select_related("savings_account__product", "savings_account__cycle")
         page = self.paginate_queryset(entries.order_by("-value_date", "-created_at"))
         return self.get_paginated_response(TransactionSerializer(page, many=True).data)
+
+
+    @extend_schema(
+        methods=["GET"], request=None,
+        responses={200: OpenApiResponse(description="Monthly amount, scheduled change, arrears and history")},
+    )
+    @extend_schema(
+        methods=["POST"], request=MonthlyContributionSerializer,
+        responses={200: OpenApiResponse(description="The updated position")},
+    )
+    @action(detail=True, methods=["get", "post"], url_path="monthly-contribution")
+    def monthly_contribution(self, request, pk=None):
+        """The statutory monthly contribution (BR-29). Only for the mandatory regular savings account."""
+        account = self.get_object()
+        if not statutory.is_statutory(account):
+            raise NotFound("This account has no monthly contribution.")
+        if request.method == "POST":
+            serializer = MonthlyContributionSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            statutory.set_monthly_contribution(request.user, account, **serializer.validated_data)
+        return Response(money_to_str(statutory.position(account)))
+
+
+SCHEDULE_PARAMS = [
+    OpenApiParameter("period", str, description='Payroll month, e.g. "2026-10". Defaults to this month.'),
+    OpenApiParameter("include_arrears", bool, description="Add each member's arrears to the deduction (default true)."),
+]
+
+
+def _schedule(request):
+    query = DeductionScheduleQuerySerializer(data=request.query_params)
+    query.is_valid(raise_exception=True)
+    period = query.validated_data.get("period") or statutory.this_month()
+    return statutory.deduction_schedule(period, include_arrears=query.validated_data["include_arrears"])
+
+
+class DeductionScheduleView(OfficerAPIMixin, APIView):
+    """What payroll should deduct for the statutory monthly contribution (on-screen preview)."""
+
+    permission_map = {"get": (P.VIEW_SAVINGS,)}
+
+    @extend_schema(parameters=SCHEDULE_PARAMS, responses={200: OpenApiResponse(description="Rows and totals")})
+    def get(self, request):
+        return Response(money_to_str(_schedule(request)))
+
+
+class DeductionScheduleDownloadView(OfficerAPIMixin, APIView):
+    """The schedule as Excel, in the CONTRIBUTIONS batch layout so the same sheet can be uploaded back."""
+
+    permission_map = {"get": (P.POST_SAVINGS_CONTRIBUTION,)}
+
+    @extend_schema(
+        parameters=SCHEDULE_PARAMS,
+        responses={
+            (200, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"): OpenApiResponse(description="Deduction schedule")
+        },
+    )
+    def get(self, request):
+        schedule = _schedule(request)
+        content = statutory.schedule_workbook(schedule, CooperativeSettings.load().name)
+        record(
+            "savings.deduction_schedule_exported",
+            actor=request.user,
+            metadata={
+                "period": schedule["period"],
+                "include_arrears": schedule["include_arrears"],
+                "members": schedule["totals"]["members"],
+                "amount": schedule["totals"]["amount"],
+            },
+        )
+        response = HttpResponse(content, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        response["Content-Disposition"] = f'attachment; filename="emdi-deductions-{schedule["period"]}.xlsx"'
+        return response
 
 
 class ContributionView(OfficerAPIMixin, APIView):

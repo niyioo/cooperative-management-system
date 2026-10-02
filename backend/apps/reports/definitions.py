@@ -25,6 +25,7 @@ from apps.members.models import Member, MemberStatus
 from apps.savings.models import ProductKind, SavingsAccount, SavingsCycle
 from apps.savings.rules import cycle_months
 from apps.savings.selectors import cycle_grid
+from apps.savings.statutory import arrears_rows
 
 from .engine import DATE, INT, MONEY, PERCENT, Column, Report, register
 
@@ -120,6 +121,37 @@ class SavingsReport(Report):
         cycle = sum((r["balance"] for r in rows if r["kind"] != "Regular"), ZERO)
         regular = sum((r["balance"] for r in rows if r["kind"] == "Regular"), ZERO)
         return [("Christmas / cycle savings", cycle, MONEY), ("Other savings", regular, MONEY), ("Total savings", cycle + regular, MONEY)]
+
+
+@register
+class ContributionArrearsReport(Report):
+    key = "contribution-arrears"
+    title = "Monthly contribution arrears"
+    description = (
+        "Members whose posted monthly contributions are below what they should have paid since tracking began "
+        "(BR-29), largest arrears first."
+    )
+    module = "Savings"
+    permission = P.VIEW_SAVINGS
+    filters = ("department",)
+    columns = [
+        *_member_cols(), Column("staff_number", "Staff no."), Column("department", "Department"), Column("phone", "Phone"),
+        Column("monthly", "Monthly amount", MONEY), Column("tracked_from", "Tracked from", DATE),
+        Column("expected", "Expected", MONEY, total=True), Column("paid", "Paid", MONEY, total=True),
+        Column("arrears", "Arrears", MONEY, total=True), Column("months_behind", "Months behind", INT),
+    ]
+
+    def rows(self, f):
+        for account, p in arrears_rows(f.get("department")):
+            m = account.member
+            yield {
+                **_member_vals(m), "staff_number": m.staff_number or "", "department": m.department.name if m.department_id else "",
+                "phone": m.phone, "monthly": p["amount"], "tracked_from": p["tracked_from"], "expected": p["expected_total"],
+                "paid": p["paid_total"], "arrears": p["arrears"], "months_behind": p["months_behind"],
+            }
+
+    def summary(self, rows, f):
+        return [("Members in arrears", len(rows), INT), ("Total arrears", sum((r["arrears"] for r in rows), ZERO), MONEY)]
 
 
 @register
