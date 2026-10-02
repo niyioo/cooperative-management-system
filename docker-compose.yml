@@ -1,53 +1,48 @@
-version: '3.8'
-
+# Local development stack. Credentials here are development-only defaults;
+# override them in a .env file next to this compose file.
 services:
-  # 1. PostgreSQL Database
   db:
-    image: postgres:15-alpine
-    container_name: bravedge_db
-    restart: always
+    image: postgres:16-alpine
+    container_name: emdi_coop_db
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: cooperative_db
-      POSTGRES_USER: coop_user
-      POSTGRES_PASSWORD: Coop@12345
+      POSTGRES_DB: ${DB_NAME:-emdi_coop}
+      POSTGRES_USER: ${DB_USER:-emdi_coop}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-emdi_dev_password}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
-    # ✅ ADDED: Healthcheck so the backend knows when it's safe to connect
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U coop_user -d cooperative_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-emdi_coop} -d ${DB_NAME:-emdi_coop}"]
       interval: 3s
       timeout: 3s
-      retries: 5
+      retries: 10
 
-  # 2. Django Backend
   backend:
     build: ./backend
-    container_name: bravedge_backend
-    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    container_name: emdi_coop_backend
+    command: sh -c "pip install -q -r requirements/dev.txt && python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    user: root
     volumes:
       - ./backend:/app
     ports:
       - "8000:8000"
     environment:
-      - DEBUG=True
-      - ALLOWED_HOSTS=*
-      - DB_NAME=cooperative_db
-      - DB_USER=coop_user
-      - DB_PASSWORD=Coop@12345
-      - DB_HOST=db
-      - DB_PORT=5432
-      - CORS_ALLOWED_ORIGIN=http://localhost:5173
+      DJANGO_SETTINGS_MODULE: config.settings.dev
+      DB_NAME: ${DB_NAME:-emdi_coop}
+      DB_USER: ${DB_USER:-emdi_coop}
+      DB_PASSWORD: ${DB_PASSWORD:-emdi_dev_password}
+      DB_HOST: db
+      DB_PORT: "5432"
+      CORS_ALLOWED_ORIGINS: http://localhost:5173
     depends_on:
-      # ✅ ADDED: Tell the backend to wait for the db healthcheck to pass
       db:
         condition: service_healthy
 
-  # 3. React Frontend
   frontend:
     build: ./frontend
-    container_name: bravedge_frontend
+    container_name: emdi_coop_frontend
     command: npm run dev -- --host 0.0.0.0
     ports:
       - "5173:5173"
@@ -55,7 +50,7 @@ services:
       - ./frontend:/app
       - /app/node_modules
     environment:
-      - VITE_API_BASE_URL=http://localhost:8000/api/v1
+      VITE_API_BASE_URL: http://localhost:8000/api/v1
     depends_on:
       - backend
 
