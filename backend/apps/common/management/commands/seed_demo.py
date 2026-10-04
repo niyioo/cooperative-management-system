@@ -135,15 +135,12 @@ class Command(BaseCommand):
                 savings.post_contribution(accountant, account=account, amount=D("5000"), period=datetime.date(year, month, 1),
                                           value_date=min(datetime.date(year, month, 25), today), description=f"Payroll deduction {datetime.date(year, month, 1):%b %Y}")
 
-        # Monthly statutory contributions into Regular Savings (BR-29): a ₦5,000 minimum,
-        # tracked from January. Ada chose ₦10,000; Bayo missed April and May and Tunde
-        # missed June, so both are in arrears. Zainab has asked for ₦8,000 from next month.
-        # Set directly: as configured before go-live, so there is no history of an earlier minimum to keep.
-        SavingsProduct.objects.filter(pk=regular.pk).update(min_contribution=D("5000"), expected_monthly_contribution=D("5000"))
-        for member in everyone:
-            SavingsAccount.objects.filter(member=member, product=regular).update(opened_on=member.date_joined)
-        coop.contributions_tracked_from = datetime.date(year, 1, 1)
-        coop.save()
+        # Monthly statutory contributions into Regular Savings (BR-29), ₦5,000 minimum and no
+        # maximum (the product defaults). The system "went live" in January, when the opening
+        # balances above were brought forward, so the accounts open then and arrears count from
+        # there. Ada chose ₦10,000; Bayo missed April and May and Tunde missed June, so both are
+        # in arrears. Zainab has asked for ₦8,000 from next month.
+        SavingsAccount.objects.filter(member__in=everyone, product=regular).update(opened_on=datetime.date(year, 1, 1))
         ada_regular = SavingsAccount.objects.get(member=ada, product=regular)
         MonthlyContributionChange.objects.create(account=ada_regular, amount=D("10000"), effective_from=datetime.date(year, 1, 1),
                                                  changed_by=ada.user, reason="Chosen by the member")

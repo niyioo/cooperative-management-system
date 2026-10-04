@@ -116,9 +116,9 @@ class TestAdjustments:
 
 
 def test_ledger_summary(as_user, accountant, treasurer, march, regular_account):
-    savings.post_contribution(accountant, account=regular_account, amount=Decimal("2000"))
+    savings.post_contribution(accountant, account=regular_account, amount=Decimal("6000"))
     data = as_user(treasurer).get(f"{TXNS}summary/").data
     by_type = {row["txn_type"]: row for row in data["by_type"]}
     assert by_type["SAVINGS_CONTRIBUTION"]["count"] == 2
-    assert by_type["SAVINGS_CONTRIBUTION"]["credits"] == "7000.00"
+    assert by_type["SAVINGS_CONTRIBUTION"]["credits"] == "11000.00"
     assert data["entries"] == Transaction.objects.count()

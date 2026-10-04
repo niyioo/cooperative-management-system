@@ -111,7 +111,7 @@ class TestChristmasContributions:
 
 class TestRegularContributions:
     def test_period_defaults_to_the_value_date_month(self, as_user, accountant, regular_account):
-        response = contribute(as_user(accountant), regular_account, "2500", value_date="2026-02-14")
+        response = contribute(as_user(accountant), regular_account, "6000", value_date="2026-02-14")
         assert response.data["period"] == "2026-02-01"
 
 
@@ -158,16 +158,16 @@ class TestWithdrawals:
     def test_enabled_withdrawal_needs_balance_and_approval(self, as_user, accountant, treasurer, regular_account, regular):
         regular.allow_officer_withdrawal = True
         regular.save()
-        contribute(as_user(accountant), regular_account, "3000")
+        contribute(as_user(accountant), regular_account, "6000")
         client = as_user(treasurer)
-        too_much = client.post(WITHDRAWALS, {"account": str(regular_account.pk), "amount": "5000", "reason": "Emergency"}, format="json")
+        too_much = client.post(WITHDRAWALS, {"account": str(regular_account.pk), "amount": "8000", "reason": "Emergency"}, format="json")
         assert code(too_much) == "insufficient_balance"
 
         entry = client.post(WITHDRAWALS, {"account": str(regular_account.pk), "amount": "1000", "reason": "Emergency"}, format="json").data
         assert entry["status"] == "PENDING"  # withdrawals are maker-checker by default
         chairman = make_officer("Cooperative Chairman")
         as_user(chairman).post(f"/api/v1/admin/transactions/{entry['id']}/approve/")
-        assert as_user(treasurer).get(f"{ACCOUNTS}{regular_account.pk}/").data["balance"] == "2000.00"
+        assert as_user(treasurer).get(f"{ACCOUNTS}{regular_account.pk}/").data["balance"] == "5000.00"
 
 
 class TestGrid:

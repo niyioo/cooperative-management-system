@@ -51,7 +51,7 @@ Re-run after the guarantor and monthly-contribution features. `pip-audit`, `npm 
 | 10 | Password change was not rate-limited, so someone holding a stolen access token could guess the current password | Medium | 5 attempts per minute per user |
 | 11 | API responses had no caching directive, so a browser or proxy could keep the login response (with the access token) or members' financial records | Medium | Every `/api/` response is sent with `Cache-Control: no-store` and `Pragma: no-cache` |
 | 12 | The one-time token from activation and reset e-mails stayed in the address bar and browser history after the page opened | Low | The page keeps the token in memory and removes it from the URL straight away |
-| 13 | No upper limit on the monthly contribution a member can choose, so a typo could reach the payroll schedule | Low | `max_monthly_contribution` on the savings product (Regular Savings: ₦1,000,000 by default, editable; blank means no limit) |
+| 13 | No upper limit on the monthly contribution a member can choose, so a typo could reach the payroll schedule | Low | `max_monthly_contribution` on the savings product, enforced whenever one is set. EMDI chose no maximum for Regular Savings (blank); officers can set one under *Savings › Products* |
 
 Tests: `backend/tests/test_security_hardening.py`.
 

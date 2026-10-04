@@ -68,15 +68,15 @@ class TestNoCaching:
 class TestMonthlyContributionCeiling:
     @pytest.fixture
     def regular(self, db):
-        product = SavingsProduct.objects.get(code="REGULAR")
-        product.min_contribution = Decimal("5000")
-        product.save()
-        return product
+        return SavingsProduct.objects.get(code="REGULAR")
 
-    def test_regular_savings_has_a_default_ceiling(self, regular):
-        assert regular.max_monthly_contribution == Decimal("1000000.00")
+    def test_emdi_defaults_are_a_5000_minimum_and_no_maximum(self, regular):
+        assert regular.min_contribution == Decimal("5000.00")
+        assert regular.expected_monthly_contribution == Decimal("5000.00")
+        assert regular.max_monthly_contribution is None
 
-    def test_member_cannot_choose_more_than_the_maximum(self, as_user, member, regular):
+    def test_member_cannot_choose_more_than_the_maximum(self, as_user, member, super_admin, regular):
+        services.update_product(super_admin, regular, max_monthly_contribution=Decimal("1000000"))
         SavingsAccount.objects.get_or_create(member=member, product=regular, cycle=None)
         client = as_user(member.user)
         response = client.post("/api/v1/me/savings/monthly-contribution/", {"amount": "1000000.01"}, format="json")
@@ -92,8 +92,7 @@ class TestMonthlyContributionCeiling:
             services.update_product(super_admin, regular, max_monthly_contribution=Decimal("4000"))
         assert raised.value.code == "invalid_maximum"
 
-    def test_blank_maximum_means_no_limit(self, as_user, member, super_admin, regular):
-        services.update_product(super_admin, regular, max_monthly_contribution=None)
+    def test_blank_maximum_means_no_limit(self, as_user, member, regular):
         SavingsAccount.objects.get_or_create(member=member, product=regular, cycle=None)
         response = as_user(member.user).post("/api/v1/me/savings/monthly-contribution/", {"amount": "5000000"}, format="json")
         assert response.status_code == 200
