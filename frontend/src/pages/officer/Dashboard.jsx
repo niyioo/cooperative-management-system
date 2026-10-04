@@ -1,18 +1,18 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, Briefcase, CalendarX, ChevronRight, Gift, HandCoins, PiggyBank, Users } from 'lucide-react';
+import { AlertTriangle, Briefcase, ChevronRight, Gift, HandCoins, PiggyBank, Users } from 'lucide-react';
 import { adminApi } from '../../api/admin';
 import TrendPanel from '../../components/officer/TrendPanel';
 import { useAuth } from '../../auth/AuthProvider';
 import { Alert } from '../../components/ui/Alert';
 import { StatusBadge } from '../../components/ui/Badge';
-import { Card, CardHeader } from '../../components/ui/Card';
+import { Card, CardBody, CardHeader } from '../../components/ui/Card';
 import EmptyState from '../../components/ui/EmptyState';
 import PageHeader from '../../components/ui/PageHeader';
 import QueryState from '../../components/ui/QueryState';
 import StatCard from '../../components/ui/StatCard';
 import { Money, Table, Td, Th } from '../../components/ui/Table';
-import { formatDate, formatDateTime, formatNaira } from '../../lib/format';
+import { formatDate, formatDateTime, formatNaira, formatPeriod } from '../../lib/format';
 
 const APPROVALS = [
   ['entries', 'Transactions awaiting approval', '/admin/transactions/pending'],
@@ -29,6 +29,47 @@ const TRENDS = [
   ['loan_repayments', 'Loan repayments'],
   ['investment_contributions', 'Investment contributions'],
 ];
+
+/** This month's statutory monthly contributions: expected, collected so far, and who is behind (BR-29). */
+function MonthlyContributions({ m }) {
+  const share = Number(m.expected) ? Math.min(100, Math.round((Number(m.collected) / Number(m.expected)) * 100)) : 0;
+  return (
+    <Card>
+      <CardHeader
+        title={`Monthly contributions · ${formatPeriod(m.month)}`}
+        description="Payroll deductions into Regular Savings"
+        action={<Link to="/admin/savings/deductions" className="text-sm font-semibold text-brand-600 hover:underline">Deduction schedule</Link>}
+      />
+      <CardBody>
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Expected this month</p>
+            <p className="tabular mt-1 text-2xl font-bold text-slate-900">{formatNaira(m.expected)}</p>
+            <p className="text-xs text-slate-500">{m.members} contributing member(s)</p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Collected so far</p>
+            <p className="tabular mt-1 text-2xl font-bold text-emerald-700">{formatNaira(m.collected)}</p>
+            <div className="mt-2 h-2 rounded-full bg-slate-100" role="img" aria-label={`${share}% collected`}>
+              <div className="h-2 rounded-full bg-emerald-500" style={{ width: `${share}%` }} />
+            </div>
+            <p className="mt-1 text-xs text-slate-500">{m.members_paid} of {m.members} member(s) recorded · {share}%</p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Members in arrears</p>
+            <p className={`tabular mt-1 text-2xl font-bold ${m.arrears_members ? 'text-amber-700' : 'text-slate-900'}`}>{m.arrears_members}</p>
+            <p className="text-xs text-slate-500">behind on earlier months</p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total arrears</p>
+            <p className={`tabular mt-1 text-2xl font-bold ${Number(m.arrears_amount) ? 'text-red-700' : 'text-slate-900'}`}>{formatNaira(m.arrears_amount)}</p>
+            <Link to="/admin/reports/contribution-arrears" className="text-xs font-semibold text-brand-600 hover:underline">Arrears report</Link>
+          </div>
+        </div>
+      </CardBody>
+    </Card>
+  );
+}
 
 function Approvals({ approvals }) {
   const items = APPROVALS.filter(([key]) => key in approvals);
@@ -93,12 +134,9 @@ export default function Dashboard() {
                 <StatCard label="Overdue loans" value={d.loans.overdue_count} icon={AlertTriangle} tone={d.loans.overdue_count ? 'amber' : 'slate'}
                   hint={`${formatNaira(d.loans.overdue_amount)} in arrears`} />
               )}
-              {d.savings?.contribution_arrears && (
-                <StatCard label="Contribution arrears" value={formatNaira(d.savings.contribution_arrears.amount)} icon={CalendarX}
-                  tone={d.savings.contribution_arrears.members ? 'amber' : 'slate'}
-                  hint={`${d.savings.contribution_arrears.members} member(s) behind on monthly contributions`} />
-              )}
             </div>
+
+            {d.savings?.monthly_contributions && <MonthlyContributions m={d.savings.monthly_contributions} />}
 
             <div className="grid gap-6 lg:grid-cols-3">
               <div className="space-y-6 lg:col-span-2">

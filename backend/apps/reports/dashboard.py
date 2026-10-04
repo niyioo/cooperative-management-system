@@ -20,7 +20,7 @@ from apps.loans.selectors import overdue_loans
 from apps.members.models import Member, MemberStatus
 from apps.notifications.selectors import visible_announcements
 from apps.savings.models import ProductKind
-from apps.savings.statutory import arrears_rows
+from apps.savings.statutory import month_summary
 
 T = TransactionType
 TREND_SERIES = {
@@ -74,16 +74,15 @@ def officer_dashboard(user):
             "other": _net(savings.filter(savings_account__product__kind=ProductKind.REGULAR)),
             "christmas_year": today.year,
         }
-        behind = arrears_rows()
-        data["savings"]["contribution_arrears"] = {
-            "members": len(behind),
-            "amount": sum((p["arrears"] for _, p in behind), ZERO),
-            "top": [
-                {"account_id": str(a.pk), "member": a.member.full_name, "membership_number": a.member.membership_number,
-                 "arrears": p["arrears"], "months_behind": p["months_behind"]}
-                for a, p in behind[:5]
-            ],
-        }
+        monthly = month_summary()
+        behind = monthly.pop("behind")
+        top = [
+            {"account_id": str(a.pk), "member": a.member.full_name, "membership_number": a.member.membership_number,
+             "arrears": p["arrears"], "months_behind": p["months_behind"]}
+            for a, p in behind[:5]
+        ]
+        data["savings"]["monthly_contributions"] = monthly
+        data["savings"]["contribution_arrears"] = {"members": monthly["arrears_members"], "amount": monthly["arrears_amount"], "top": top}
 
     if can(P.VIEW_LOANS):
         running = Loan.objects.filter(status__in=Loan.RUNNING_STATUSES)

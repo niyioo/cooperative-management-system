@@ -145,6 +145,9 @@ class TestArrears:
         data = as_user(treasurer).get("/api/v1/admin/dashboard/").data
         assert data["savings"]["contribution_arrears"]["members"] == 1
         assert data["savings"]["contribution_arrears"]["amount"] == "30000.00"
+        monthly = data["savings"]["monthly_contributions"]
+        assert monthly["members"] == 1 and monthly["expected"] == "5000.00"
+        assert monthly["collected"] == "0.00" and monthly["arrears_members"] == 1
 
 
 class TestMemberChangesTheirAmount:

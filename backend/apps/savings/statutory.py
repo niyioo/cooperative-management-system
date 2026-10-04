@@ -182,6 +182,23 @@ def tracked_accounts(product=None):
     )
 
 
+def month_summary(today=None):
+    """This month's monthly-contribution figures for the officer dashboard, plus who is behind."""
+    accounts = list(tracked_accounts())
+    found = positions(accounts, today=today)
+    behind = sorted(((a, found[a.pk]) for a in accounts if found[a.pk]["arrears"] > 0), key=lambda pair: pair[1]["arrears"], reverse=True)
+    return {
+        "month": this_month(today).strftime("%Y-%m"),
+        "members": len(accounts),
+        "expected": sum((p["amount"] for p in found.values()), ZERO),
+        "collected": sum((p["paid_this_month"] for p in found.values()), ZERO),
+        "members_paid": sum(1 for p in found.values() if p["paid_this_month"] > 0),
+        "arrears_members": len(behind),
+        "arrears_amount": sum((p["arrears"] for _, p in behind), ZERO),
+        "behind": behind,
+    }
+
+
 def arrears_rows(department=None):
     """Every member behind on their monthly contribution, largest arrears first."""
     accounts = tracked_accounts()

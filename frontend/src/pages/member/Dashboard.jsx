@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Briefcase, CalendarClock, Gift, HandCoins, Landmark, Megaphone, PiggyBank, TreePine, Wallet } from 'lucide-react';
+import { Briefcase, CalendarCheck, CalendarClock, Gift, HandCoins, Landmark, Megaphone, PiggyBank, TreePine, Wallet } from 'lucide-react';
 import { memberApi } from '../../api/member';
 import { Alert } from '../../components/ui/Alert';
 import { StatusBadge } from '../../components/ui/Badge';
@@ -9,11 +9,42 @@ import EmptyState from '../../components/ui/EmptyState';
 import QueryState from '../../components/ui/QueryState';
 import StatCard from '../../components/ui/StatCard';
 import { Money, Table, Td, Th } from '../../components/ui/Table';
-import { formatDate, formatNaira } from '../../lib/format';
+import { formatDate, formatNaira, formatPeriod } from '../../lib/format';
 
 export default function Dashboard() {
   const query = useQuery({ queryKey: ['me', 'dashboard'], queryFn: memberApi.dashboard });
   return <QueryState query={query}>{(data) => <DashboardView data={data} />}</QueryState>;
+}
+
+function MonthlyContributionPanel({ monthly }) {
+  const behind = Number(monthly.arrears) > 0;
+  return (
+    <div className={`rounded-xl border p-5 ${behind ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50'}`}>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <span className={`rounded-lg p-2 ${behind ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+            <CalendarCheck className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <div>
+            <p className="text-sm font-semibold text-slate-800">Monthly contribution</p>
+            <p className="tabular text-2xl font-bold text-slate-900">
+              {formatNaira(monthly.amount)} <span className="text-sm font-medium text-slate-500">a month · deducted from pay into Regular Savings</span>
+            </p>
+            <p className="mt-1 text-sm text-slate-600">
+              Minimum {formatNaira(monthly.minimum)}
+              {monthly.pending_change && <> · changes to <strong>{formatNaira(monthly.pending_change.amount)}</strong> from {formatPeriod(monthly.pending_change.effective_from)}</>}
+            </p>
+          </div>
+        </div>
+        <div className="text-right">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Arrears</p>
+          <p className={`tabular text-2xl font-bold ${behind ? 'text-amber-800' : 'text-emerald-700'}`}>{behind ? formatNaira(monthly.arrears) : 'Up to date'}</p>
+          {behind && <p className="text-xs text-amber-800">About {monthly.months_behind} month{monthly.months_behind === 1 ? '' : 's'} behind</p>}
+          <Link to="/member/savings" className="mt-1 inline-block text-sm font-semibold text-brand-600 hover:underline">View or change</Link>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function DashboardView({ data }) {
@@ -43,17 +74,11 @@ function DashboardView({ data }) {
         </Alert>
       )}
 
-      {monthly && Number(monthly.arrears) > 0 && (
-        <Alert tone="warning" title="Monthly contribution in arrears">
-          Your monthly contributions are {formatNaira(monthly.arrears)} short (about {monthly.months_behind} month{monthly.months_behind === 1 ? '' : 's'}).{' '}
-          <Link to="/member/savings" className="font-semibold underline">See month by month</Link>
-        </Alert>
-      )}
+      {monthly && <MonthlyContributionPanel monthly={monthly} />}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label={`Christmas Savings ${summary.christmas_year}`} value={formatNaira(summary.christmas_savings)} icon={TreePine} tone="green" hint="January – October" />
-        <StatCard label="Other Savings" value={formatNaira(summary.other_savings)} icon={PiggyBank}
-          hint={monthly ? `Monthly contribution ${formatNaira(monthly.amount)}` : undefined} />
+        <StatCard label="Other Savings" value={formatNaira(summary.other_savings)} icon={PiggyBank} />
         <StatCard label="Total Savings" value={formatNaira(summary.total_savings)} icon={Wallet} tone="slate" />
         <StatCard label="Active Loan" value={formatNaira(summary.active_loan_principal)} icon={HandCoins} tone="amber"
           hint={summary.active_loans ? `${summary.active_loans} running loan${summary.active_loans > 1 ? 's' : ''}` : 'No running loan'} />
