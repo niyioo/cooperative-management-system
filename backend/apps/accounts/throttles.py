@@ -1,4 +1,4 @@
-from rest_framework.throttling import SimpleRateThrottle
+from rest_framework.throttling import AnonRateThrottle, SimpleRateThrottle, UserRateThrottle
 
 
 class LoginRateThrottle(SimpleRateThrottle):
@@ -25,3 +25,17 @@ class PasswordResetRateThrottle(SimpleRateThrottle):
 
     def get_cache_key(self, request, view):
         return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
+
+
+class APIUserRateThrottle(UserRateThrottle):
+    """Default limit for every signed-in request (all endpoints together), per user."""
+
+
+class APIAnonRateThrottle(AnonRateThrottle):
+    """Default limit for unauthenticated requests, per address."""
+
+
+class PasswordChangeRateThrottle(UserRateThrottle):
+    """Limits guesses at the current password by someone holding a stolen access token."""
+
+    scope = "password_change"

@@ -157,7 +157,7 @@ export function SavingsCycleDetail() {
 
 const PRODUCT_DEFAULTS = {
   name: '', code: '', description: '', kind: 'REGULAR', cycle_start_month: 1, cycle_end_month: 10, payout_month: 12,
-  expected_monthly_contribution: '0', min_contribution: '0', allow_contribution_outside_window: false, allow_multiple_contributions_per_period: true,
+  expected_monthly_contribution: '0', min_contribution: '0', max_monthly_contribution: '', allow_contribution_outside_window: false, allow_multiple_contributions_per_period: true,
   min_membership_months: 0, is_mandatory: false, allow_officer_withdrawal: false, allow_member_withdrawal_request: false,
   counts_toward_loan_eligibility: true, is_active: true, display_order: 0,
 };
@@ -172,6 +172,7 @@ function ProductForm({ product }) {
         const data = { ...v };
         ['cycle_start_month', 'cycle_end_month', 'payout_month'].forEach((k) => { data[k] = data.kind === 'CYCLE' ? Number(data[k]) : null; });
         ['min_membership_months', 'display_order'].forEach((k) => { data[k] = Number(data[k]); });
+        data.max_monthly_contribution = data.max_monthly_contribution === '' || data.max_monthly_contribution === null ? null : data.max_monthly_contribution;
         delete data.id; delete data.kind_label;
         return data;
       }}
@@ -194,6 +195,8 @@ function ProductForm({ product }) {
           <div className="grid gap-4 sm:grid-cols-2">
             <TextField label="Expected monthly (₦)" inputMode="decimal" {...register('expected_monthly_contribution')} error={errors.expected_monthly_contribution?.message} />
             <TextField label="Minimum contribution (₦)" inputMode="decimal" {...register('min_contribution')} error={errors.min_contribution?.message} />
+            <TextField label="Maximum monthly contribution (₦)" inputMode="decimal" {...register('max_monthly_contribution')} error={errors.max_monthly_contribution?.message}
+              hint="The most a member may choose to contribute each month. Blank means no limit." />
             <TextField label="Minimum membership (months)" type="number" {...register('min_membership_months')} error={errors.min_membership_months?.message} />
             <TextField label="Display order" type="number" {...register('display_order')} error={errors.display_order?.message} />
           </div>

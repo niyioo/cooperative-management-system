@@ -11,7 +11,7 @@ PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 REST_FRAMEWORK = {  # noqa: F405
     **REST_FRAMEWORK,  # noqa: F405
-    "DEFAULT_THROTTLE_RATES": {"login": "1000/min", "login_ip": "1000/min", "password_reset": "1000/min", "guarantor_lookup": "1000/min"},
+    "DEFAULT_THROTTLE_RATES": {"user": "100000/min", "anon": "100000/min", "password_change": "1000/min", "login": "1000/min", "login_ip": "1000/min", "password_reset": "1000/min", "guarantor_lookup": "1000/min"},
 }
 REFRESH_COOKIE = {**REFRESH_COOKIE, "SECURE": False}  # noqa: F405
 FRONTEND_URL = "http://testserver"

@@ -141,6 +141,7 @@ def positions(accounts, *, today=None, history=False):
             "account_number": account.account_number,
             "product": account.product.name,
             "minimum": minimum,
+            "maximum": account.product.max_monthly_contribution,
             "amount": amount,
             "pending_change": {"amount": pending.amount, "effective_from": pending.effective_from} if pending else None,
             "tracked": tracked,
@@ -219,6 +220,15 @@ def _field_error(field, message, code):
     raise DomainError(message, code=code, fields={field: [message]})
 
 
+def amount_problem(product, amount):
+    """(message, code) if `amount` is outside the product's monthly limits, else None."""
+    if amount < product.min_contribution:
+        return f"The minimum monthly contribution is ₦{product.min_contribution:,.2f}.", "below_minimum"
+    if product.max_monthly_contribution is not None and amount > product.max_monthly_contribution:
+        return f"The maximum monthly contribution is ₦{product.max_monthly_contribution:,.2f}.", "above_maximum"
+    return None
+
+
 @transaction.atomic
 def set_monthly_contribution(actor, account, *, amount, effective_from=None, reason="", by_member=False):
     """
@@ -246,8 +256,9 @@ def set_monthly_contribution(actor, account, *, amount, effective_from=None, rea
     amount = Decimal(amount).quantize(Decimal("0.01"))
     if amount <= 0:
         _field_error("amount", "Enter an amount greater than zero.", "invalid_amount")
-    if amount < product.min_contribution:
-        _field_error("amount", f"The minimum monthly contribution is ₦{product.min_contribution:,.2f}.", "below_minimum")
+    problem = amount_problem(product, amount)
+    if problem:
+        _field_error("amount", *problem)
 
     current = this_month()
     if by_member:

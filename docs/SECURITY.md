@@ -6,7 +6,7 @@ Review of the EMDI Cooperative Management System carried out at the end of the b
 
 | Area | Status |
 |---|---|
-| Authentication and sessions | Sound. JWT access token held in memory (15 min); rotating refresh token in an `httpOnly` cookie, blacklisted on use and revoked on password change; login and reset are throttled and don't reveal which accounts exist |
+| Authentication and sessions | Sound. JWT access token held in memory (15 min); rotating refresh token in an `httpOnly` cookie, blacklisted on use and revoked on password change; API responses are never cached; login, reset and password change are throttled and don't reveal which accounts exist |
 | Authorisation | Sound, and **verified automatically**: an access-control sweep exercises every API route (≈530 checks) |
 | Data isolation between members | Sound: member endpoints never take a member id; other members' objects return 404 (tested for reads and writes) |
 | Financial integrity | Sound: append-only ledger and audit log **enforced by PostgreSQL triggers** (tested), maker–checker with a database check, no delete endpoints |
@@ -41,11 +41,33 @@ Review of the EMDI Cooperative Management System carried out at the end of the b
 | 7 | The OpenAPI schema (`/api/schema/`) was public in production | Low | Requires a signed-in user in production (the interactive docs were already development-only) |
 | 8 | No ESLint configuration, so the lint script could not run | Hygiene | Added `.eslintrc.cjs`; lint is clean with zero warnings and runs in CI |
 
+## Follow-up review (October 2026)
+
+Re-run after the guarantor and monthly-contribution features. `pip-audit`, `npm audit` and `check --deploy` were clean, and the access-control sweep covers the new endpoints. Fixed:
+
+| # | Finding | Severity | Fix |
+|---|---|---|---|
+| 9 | Only login, password reset and guarantor lookup were rate-limited. A signed-in user, or a script with a stolen token, could hammer heavy endpoints (reports, deduction schedule) | Medium | Every request now counts against a default limit: 600/min per user, 60/min per address when signed out (`API_RATE_USER`, `API_RATE_ANON`). The health check is exempt |
+| 10 | Password change was not rate-limited, so someone holding a stolen access token could guess the current password | Medium | 5 attempts per minute per user |
+| 11 | API responses had no caching directive, so a browser or proxy could keep the login response (with the access token) or members' financial records | Medium | Every `/api/` response is sent with `Cache-Control: no-store` and `Pragma: no-cache` |
+| 12 | The one-time token from activation and reset e-mails stayed in the address bar and browser history after the page opened | Low | The page keeps the token in memory and removes it from the URL straight away |
+| 13 | No upper limit on the monthly contribution a member can choose, so a typo could reach the payroll schedule | Low | `max_monthly_contribution` on the savings product (Regular Savings: ₦1,000,000 by default, editable; blank means no limit) |
+
+Tests: `backend/tests/test_security_hardening.py`.
+
+## Where things are kept
+
+- **Passwords:** only as one-way Argon2 hashes, in PostgreSQL table `accounts_user` (column `password`). They cannot be read back.
+- **Session tokens:** the access token only in the browser tab's memory (lost on reload, renewed from the cookie); the refresh token only in an `httpOnly`, path-scoped cookie (`Secure` in production) that page scripts cannot read, rotated and blacklisted on every use. Neither is written to logs, the audit log or browser storage. JWTs carry only the user id and token metadata, no personal data.
+- **Server secrets** (`SECRET_KEY`, database and e-mail passwords): environment variables in `backend/.env` on the server, never in git.
+- **Audit log:** database table `audit_auditlog` (append-only, enforced by triggers), shown under *Audit Logs* in the officer portal.
+- **Application logs:** standard output (collected by Docker or gunicorn in production), level set by `LOG_LEVEL`.
+
 ## Controls verified (no change needed)
 
 - **Passwords:** Argon2, minimum 10 characters plus Django's validators, forced change after a temporary password, single-use reset and activation links that expire.
 - **Account enumeration:** login failures and password-reset requests give identical responses for unknown accounts.
-- **Brute force:** login is throttled per IP and identifier and per IP; reset requests are throttled; failed logins are audited.
+- **Brute force:** login is throttled per IP and identifier and per IP; reset requests and password changes are throttled; failed logins are audited; every other request has a default per-user / per-address limit.
 - **Token theft:** no token in `localStorage`; the refresh cookie is `httpOnly`, `Secure` and scoped to `/api/v1/auth/`; refresh and logout require `X-Requested-With`, which a cross-site form cannot send.
 - **Separation of duties:** an approver can never be the creator (checked in the service and by a database `CHECK`); officers cannot act on their own member records (BR-18, tested per action); you can't grant permissions you don't hold or change your own roles; at least one administrator must remain.
 - **Files:** uploads are limited to 5 MB and PDF/JPG/PNG verified by content signature (disguised files are rejected), stored outside the web root, and only served through permission-checked endpoints. Downloads are audited.

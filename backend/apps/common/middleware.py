@@ -56,3 +56,20 @@ class RequestContextMiddleware:
             return response
         finally:
             _current.reset(token)
+
+
+class NoStoreAPIMiddleware:
+    """
+    API responses carry access tokens and members' financial records, so no
+    browser, proxy or shared cache may keep a copy of them.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        if request.path.startswith("/api/"):
+            response["Cache-Control"] = "no-store"
+            response["Pragma"] = "no-cache"
+        return response

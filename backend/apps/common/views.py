@@ -11,6 +11,7 @@ class HealthCheckView(APIView):
 
     authentication_classes = ()
     permission_classes = (AllowAny,)
+    throttle_classes = ()
 
     @extend_schema(responses=inline_serializer("HealthCheck", {"status": serializers.CharField()}))
     def get(self, request):

@@ -34,7 +34,7 @@ def _monthly_contribution(member):
     if account is None:
         return None
     p = statutory.positions([account])[account.pk]
-    return {key: p[key] for key in ("amount", "minimum", "pending_change", "arrears", "months_behind", "tracked")}
+    return {key: p[key] for key in ("amount", "minimum", "maximum", "pending_change", "arrears", "months_behind", "tracked")}
 
 
 def member_dashboard(member):

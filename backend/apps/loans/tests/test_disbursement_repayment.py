@@ -172,8 +172,8 @@ class TestRepaymentBatch:
 
 class TestOverdueAndDefault:
     def test_overdue_list_and_marking_default(self, as_user, treasurer, chairman, approved):
-        four_months_ago = timezone.localdate() - datetime.timedelta(days=125)
-        loan = active_loan(approved, treasurer, chairman, disbursed_on=four_months_ago)
+        five_months_ago = timezone.localdate() - datetime.timedelta(days=160)  # at least 3 instalments past grace on any date
+        loan = active_loan(approved, treasurer, chairman, disbursed_on=five_months_ago)
         overdue = as_user(treasurer).get(f"{LOANS}overdue/").data["results"]
         assert [o["reference"] for o in overdue] == [loan.reference]
         arrears = overdue[0]["arrears"]

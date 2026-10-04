@@ -30,7 +30,7 @@ from ..serializers import (
     TokenPasswordSerializer,
     user_payload,
 )
-from ..throttles import LoginIPRateThrottle, LoginRateThrottle, PasswordResetRateThrottle
+from ..throttles import APIUserRateThrottle, LoginIPRateThrottle, LoginRateThrottle, PasswordChangeRateThrottle, PasswordResetRateThrottle
 from ..tokens import clear_refresh_cookie, issue_tokens, set_refresh_cookie
 
 
@@ -113,6 +113,7 @@ class MeView(APIView):
 
 class PasswordChangeView(APIView):
     permission_classes = (IsAuthenticated,)
+    throttle_classes = (APIUserRateThrottle, PasswordChangeRateThrottle)
 
     @extend_schema(request=PasswordChangeSerializer, responses={200: TokenResponseSerializer})
     def post(self, request):

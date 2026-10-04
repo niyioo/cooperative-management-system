@@ -170,7 +170,8 @@ function ChangeAmountButton({ account, data }) {
           <p className="text-sm text-slate-600">
             {account.member.full_name} contributes {formatNaira(data.amount)} a month now. The member is told of the change in the portal and by e-mail.
           </p>
-          <TextField label="New monthly amount (₦)" required inputMode="decimal" hint={`At least ${formatNaira(data.minimum)}.`}
+          <TextField label="New monthly amount (₦)" required inputMode="decimal"
+            hint={data.maximum ? `Between ${formatNaira(data.minimum)} and ${formatNaira(data.maximum)}.` : `At least ${formatNaira(data.minimum)}.`}
             {...register('amount', { required: 'Enter an amount.' })} error={errors.amount?.message} />
           <TextField label="From month" type="month" min={currentPeriod()} {...register('effective_from')} error={errors.effective_from?.message}
             hint="This month or later. A later change already scheduled is replaced." />

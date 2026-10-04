@@ -32,6 +32,7 @@ PRODUCT_FIELDS = [
     "payout_month",
     "expected_monthly_contribution",
     "min_contribution",
+    "max_monthly_contribution",
     "allow_contribution_outside_window",
     "allow_multiple_contributions_per_period",
     "min_membership_months",
@@ -69,6 +70,9 @@ def _validate_product(data):
             _field_error("cycle_end_month", "The cycle must end in the same year it starts.", "invalid_cycle_window")
     else:
         data["cycle_start_month"] = data["cycle_end_month"] = data["payout_month"] = None
+    maximum = data.get("max_monthly_contribution")
+    if maximum is not None and maximum < (data.get("min_contribution") or 0):
+        _field_error("max_monthly_contribution", "The maximum cannot be below the minimum contribution.", "invalid_maximum")
     if data.get("allow_member_withdrawal_request") and not data.get("allow_officer_withdrawal"):
         _field_error(
             "allow_member_withdrawal_request",
@@ -269,12 +273,9 @@ def open_account(actor, *, member, product, year=None, elected_monthly_amount=No
     if not account._state.adding:  # UUID pks are set before saving, so check the saved state
         raise DomainError(f"{member.full_name} already has this account ({account.account_number}).", code="account_exists")
     if elected_monthly_amount is not None and statutory.is_statutory(account):
-        if elected_monthly_amount < product.min_contribution:
-            _field_error(
-                "elected_monthly_amount",
-                f"The minimum monthly contribution is ₦{product.min_contribution:,.2f}.",
-                "below_minimum",
-            )
+        problem = statutory.amount_problem(product, elected_monthly_amount)
+        if problem:
+            _field_error("elected_monthly_amount", *problem)
     account.elected_monthly_amount = elected_monthly_amount
     account.save()
     if elected_monthly_amount and statutory.is_statutory(account):

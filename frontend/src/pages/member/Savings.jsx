@@ -139,10 +139,14 @@ function ChangeMonthlyContribution({ data }) {
             because this month&apos;s deduction may already be with payroll.
           </p>
           <TextField label="New monthly amount (₦)" required inputMode="decimal" autoFocus
-            hint={`At least ${formatNaira(data.minimum)}.`}
+            hint={data.maximum ? `Between ${formatNaira(data.minimum)} and ${formatNaira(data.maximum)}.` : `At least ${formatNaira(data.minimum)}.`}
             {...register('amount', {
               required: 'Enter an amount.',
-              validate: (v) => Number(v) >= Number(data.minimum) || `The minimum is ${formatNaira(data.minimum)}.`,
+              validate: (v) => {
+                if (Number(v) < Number(data.minimum)) return `The minimum is ${formatNaira(data.minimum)}.`;
+                if (data.maximum && Number(v) > Number(data.maximum)) return `The maximum is ${formatNaira(data.maximum)}.`;
+                return true;
+              },
             })}
             error={errors.amount?.message} />
           <button type="submit" className="hidden" aria-hidden="true" tabIndex={-1} />

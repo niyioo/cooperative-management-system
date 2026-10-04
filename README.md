@@ -124,7 +124,7 @@ Sign in with that account, then add the other officers under **Settings › Offi
 ## Running the tests
 
 ```bash
-cd backend && pytest                      # 886 tests, including the access-control sweep
+cd backend && pytest                      # 897 tests, including the access-control sweep
 cd backend && pytest --cov=apps           # with coverage (currently 95%)
 cd frontend && npm test                   # Vitest unit tests
 cd frontend && npm run lint               # ESLint, zero warnings allowed

@@ -44,6 +44,11 @@ class SavingsProduct(TimeStampedModel):
     # Contribution rules
     expected_monthly_contribution = MoneyField(default=0)
     min_contribution = MoneyField(default=0)
+    max_monthly_contribution = MoneyField(
+        null=True,
+        blank=True,
+        help_text="Highest monthly contribution a member may choose (statutory product). Blank means no limit.",
+    )
     allow_contribution_outside_window = models.BooleanField(default=False)
     allow_multiple_contributions_per_period = models.BooleanField(default=False)
 

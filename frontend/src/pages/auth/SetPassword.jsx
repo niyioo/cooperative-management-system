@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useSearchParams } from 'react-router-dom';
 import { authApi } from '../../api/client';
@@ -15,12 +15,16 @@ const MODES = {
 /** Shared page for the emailed links: /reset-password and /activate (?uid=…&token=…). */
 export default function SetPassword({ mode }) {
   const { title, action, done } = MODES[mode];
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const [finished, setFinished] = useState(false);
   const [error, setError] = useState(null);
   const { register, handleSubmit, formState, setError: setFieldError, getValues } = useForm();
-  const uid = params.get('uid');
-  const token = params.get('token');
+  // Kept in state, then removed from the URL so the token isn't left in the
+  // address bar, the browser history or a copied link.
+  const [{ uid, token }] = useState(() => ({ uid: params.get('uid'), token: params.get('token') }));
+  useEffect(() => {
+    if (params.has('token') || params.has('uid')) setParams({}, { replace: true });
+  }, [params, setParams]);
 
   const onSubmit = async ({ new_password: newPassword }) => {
     setError(null);

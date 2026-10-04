@@ -78,6 +78,7 @@ MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "apps.common.middleware.RequestContextMiddleware",
+    "apps.common.middleware.NoStoreAPIMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -214,7 +215,16 @@ REST_FRAMEWORK = {
     # JSON only by default. Form encodings send a missing boolean as False, which
     # could silently flip flags; the few file-upload endpoints opt in to multipart.
     "DEFAULT_PARSER_CLASSES": ("rest_framework.parsers.JSONParser",),
+    # Every request counts against a per-user (or, signed out, per-address) limit;
+    # login, password reset/change and guarantor lookups have tighter limits of their own.
+    "DEFAULT_THROTTLE_CLASSES": (
+        "apps.accounts.throttles.APIAnonRateThrottle",
+        "apps.accounts.throttles.APIUserRateThrottle",
+    ),
     "DEFAULT_THROTTLE_RATES": {
+        "user": env("API_RATE_USER", "600/min"),
+        "anon": env("API_RATE_ANON", "60/min"),
+        "password_change": "5/min",  # per user
         "login": "5/min",  # per IP + identifier
         "login_ip": "30/min",  # per IP, across identifiers
         "password_reset": "5/hour",
