@@ -1,7 +1,10 @@
 from django.contrib import admin
+from django.core.cache import cache
+from django.http import HttpResponse
 
 from apps.audit.services import record
 
+from .middleware import client_ip
 from .models import NumberSequence
 
 # The Django admin is a Super Administrator support console only; officers work
@@ -11,6 +14,32 @@ admin.site.has_permission = lambda request: bool(
 )
 admin.site.site_header = "EMDI Cooperative — Support Console"
 admin.site.site_title = "EMDI Cooperative"
+
+# The console has its own sign-in page, outside the API's login throttle, so it
+# gets the same protection: failed attempts are audited, and an address that
+# keeps failing is locked out for a while.
+ADMIN_LOGIN_ATTEMPTS = 5
+ADMIN_LOGIN_LOCKOUT_SECONDS = 15 * 60
+_admin_login = admin.site.login
+
+
+def _throttled_admin_login(request, extra_context=None):
+    if request.method != "POST":
+        return _admin_login(request, extra_context)
+    key = f"admin-login-failures:{client_ip(request)}"
+    failures = cache.get(key, 0)
+    if failures >= ADMIN_LOGIN_ATTEMPTS:
+        return HttpResponse("Too many failed sign-in attempts. Try again later.", status=429, content_type="text/plain")
+    response = _admin_login(request, extra_context)
+    if request.user.is_authenticated and admin.site.has_permission(request):
+        cache.delete(key)
+    else:
+        cache.set(key, failures + 1, ADMIN_LOGIN_LOCKOUT_SECONDS)
+        record("auth.admin_login_failed", metadata={"username": request.POST.get("username", "")[:254]})
+    return response
+
+
+admin.site.login = _throttled_admin_login
 
 
 SENSITIVE_FIELDS = {"password"}

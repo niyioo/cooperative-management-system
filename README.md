@@ -124,7 +124,7 @@ Sign in with that account, then add the other officers under **Settings › Offi
 ## Running the tests
 
 ```bash
-cd backend && pytest                      # 897 tests, including the access-control sweep
+cd backend && pytest                      # 913 tests, including the access-control sweep
 cd backend && pytest --cov=apps           # with coverage (currently 95%)
 cd frontend && npm test                   # Vitest unit tests
 cd frontend && npm run lint               # ESLint, zero warnings allowed
@@ -138,10 +138,10 @@ The backend tests need PostgreSQL (the schema uses PostgreSQL triggers and const
 - **Every member contributes monthly** into Regular Savings through payroll: an amount they choose, not below the cooperative's minimum. Shortfalls are tracked as arrears.
 - **Christmas Savings** runs January–October and is tracked separately from other savings.
 - **Loans need officer approval**: review, decision and disbursement are separate steps with separate permissions.
-- **Every loan needs a guarantor**: a fellow member, named by membership number, who must accept before the loan can be approved.
+- **Every loan needs a guarantor**: a fellow member, named by membership number, who must accept before the loan can be approved, and who cannot close their own account until that loan is repaid. A member may guarantee at most 2× their savings in total.
 - **Dividends** are processed in December from eligible balances.
 - **Account closure** needs officer approval, and nothing is ever deleted.
 - **Every financial operation is auditable**: posted ledger entries are immutable (corrections are reversals), approvals need a second officer, and every action is in the audit log.
 - **Members see only their own data**, and officers act only within their role's permissions.
 
-The full list (BR-01 to BR-29), with where each rule is enforced, is in [docs/ARCHITECTURE.md §10](docs/ARCHITECTURE.md#10-business-rules).
+The full list (BR-01 to BR-31), with where each rule is enforced, is in [docs/ARCHITECTURE.md §10](docs/ARCHITECTURE.md#10-business-rules).

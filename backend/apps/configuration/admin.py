@@ -42,6 +42,7 @@ class CooperativeSettingsAdmin(AuditedAdminMixin, NoDeleteAdminMixin, admin.Mode
                     "closure_disables_portal_login",
                     "maker_checker_types",
                     "loan_overdue_grace_days",
+                    "guarantor_savings_multiple",
                     "contributions_tracked_from",
                     "session_idle_timeout_minutes",
                 )

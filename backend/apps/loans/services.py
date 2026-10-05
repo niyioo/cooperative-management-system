@@ -33,6 +33,7 @@ from apps.notifications import services as notifications
 
 from .calculators import schedule_for_product
 from .eligibility import evaluate, hard_failures
+from .selectors import guarantee_room, guarantor_problem
 from .models import (
     InterestCollection,
     InterestMethod,
@@ -223,6 +224,7 @@ def submit_application(actor, application):
         message = (f"This loan needs {needed} guarantor(s); add {needed - standing} more using their membership number."
                    if standing else f"This loan needs {needed} guarantor(s). Add a guarantor using their membership number.")
         _field_error("guarantors", message, "guarantors_required")
+    _assert_shares_fit(application)
     previous = application.status
     application.status = APP.SUBMITTED
     application.submitted_at = timezone.now()
@@ -251,8 +253,11 @@ def find_guarantor(applicant, membership_number):
         _field_error("membership_number", f"No member has the membership number {number}.", "guarantor_not_found")
     if member.pk == applicant.pk:
         _field_error("membership_number", "You cannot be your own guarantor.", "guarantor_is_applicant")
-    if member.status != MemberStatus.ACTIVE:
+    if guarantor_problem(member):
         _field_error("membership_number", "This member cannot stand as a guarantor at the moment.", "guarantor_not_active")
+    room = guarantee_room(member)
+    if room is not None and room <= 0:
+        _field_error("membership_number", "This member cannot stand as a guarantor at the moment.", "guarantee_limit")
     return member
 
 
@@ -282,6 +287,20 @@ def remove_guarantor(actor, application, guarantee):
     record("loan.guarantor_removed", actor=actor, obj=application,
            metadata={"guarantor": guarantee.guarantor.membership_number, "status": guarantee.status})
     guarantee.delete()
+
+
+def _assert_shares_fit(application):
+    """BR-31: each guarantor's share must fit within what they may still guarantee."""
+    guarantees = list(application.guarantors.exclude(status=G.DECLINED).select_related("guarantor").order_by("created_at"))
+    for guarantee, share in zip(guarantees, _shares(application.amount_requested, len(guarantees))):
+        room = guarantee_room(guarantee.guarantor, exclude=guarantee)
+        if room is not None and share > room:
+            _field_error(
+                "guarantors",
+                f"{guarantee.guarantor.full_name} cannot guarantee {_money_str(share)}. "
+                "Add another guarantor to share the amount, or choose a different guarantor.",
+                "guarantee_limit",
+            )
 
 
 def _shares(amount, count):
@@ -331,6 +350,16 @@ def respond_to_guarantee(actor, guarantee, *, accept, reason=""):
     if application.status not in (APP.SUBMITTED, APP.UNDER_REVIEW):
         raise DomainError("This application is no longer waiting for guarantors.", code="not_awaiting_guarantors")
     guarantor, applicant = guarantee.guarantor, application.member
+    if accept and guarantor_problem(guarantor):
+        raise DomainError("You cannot accept while your membership is inactive or being closed.", code="guarantor_not_active")
+    if accept:
+        room = guarantee_room(guarantor, exclude=guarantee)
+        if room is not None and guarantee.amount_guaranteed > room:
+            raise DomainError(
+                f"Accepting would take your guarantees above your limit. You can guarantee up to "
+                f"{_money_str(max(room, Decimal('0')))} more (your limit is a multiple of your savings).",
+                code="guarantee_limit",
+            )
     guarantee.responded_at = timezone.now()
     if accept:
         guarantee.status = G.ACCEPTED
@@ -444,9 +473,14 @@ def approve_application(actor, application, *, approved_amount=None, approved_te
             fields={"checks": failures},
         )
     needed = application.product.guarantors_required
-    accepted = application.guarantors.filter(status=LoanGuarantor.Status.ACCEPTED).count()
-    if accepted < needed:
-        raise DomainError(f"{needed} accepted guarantor(s) are required; {accepted} so far.", code="guarantors_required")
+    accepted = application.guarantors.filter(status=LoanGuarantor.Status.ACCEPTED).select_related("guarantor")
+    lapsed = [g.guarantor for g in accepted if guarantor_problem(g.guarantor)]
+    if len(accepted) - len(lapsed) < needed:
+        detail = f" {', '.join(m.full_name for m in lapsed)} can no longer stand as guarantor." if lapsed else ""
+        raise DomainError(
+            f"{needed} accepted guarantor(s) in good standing are required; {len(accepted) - len(lapsed)} so far.{detail}",
+            code="guarantors_required",
+        )
 
     application.status = APP.APPROVED
     application.approved_amount = amount

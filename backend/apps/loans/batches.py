@@ -16,6 +16,7 @@ from apps.common.spreadsheets import (
 from apps.ledger import services as ledger
 from apps.ledger.batches import BatchHandler
 from apps.ledger.choices import BatchType, TransactionStatus, TransactionType
+from apps.ledger.models import Transaction
 from apps.members.lookup import IDENTIFIER_FIELDS, members_by_identifier
 
 from .models import Loan
@@ -32,6 +33,25 @@ COLUMNS = {
     "reference": "Reference",
 }
 ALIASES = {**{k: k for k in COLUMNS}, **{normalise_header(v): k for k, v in COLUMNS.items()}}
+
+
+def _payroll_months(running, exclude_batch=None):
+    """
+    {(loan id, month)} already covered by a payroll batch (posted or awaiting
+    approval), so the same month's deduction cannot be posted twice. Single
+    repayments outside payroll (cash, transfers) don't count.
+    """
+    loan_ids = [loan.pk for loans in running.values() for loan in loans]
+    entries = Transaction.objects.filter(
+        loan__in=loan_ids,
+        txn_type=TransactionType.LOAN_REPAYMENT,
+        batch__batch_type=BatchType.LOAN_REPAYMENTS,
+        status__in=[TransactionStatus.POSTED, TransactionStatus.PENDING],
+        period__isnull=False,
+    )
+    if exclude_batch is not None:
+        entries = entries.exclude(batch=exclude_batch)
+    return set(entries.values_list("loan_id", "period"))
 
 
 class LoanRepaymentBatchHandler(BatchHandler):
@@ -53,6 +73,8 @@ class LoanRepaymentBatchHandler(BatchHandler):
 
         default_period = options.get("period")
         claimed = defaultdict(lambda: 0)  # amount per loan claimed by earlier rows
+        in_file = {}  # (loan, month) -> first row number, to catch a repeated row
+        already = _payroll_months(running)
         lines, errors = [], []
         for row_number, values in rows:
             row_errors = {}
@@ -93,7 +115,16 @@ class LoanRepaymentBatchHandler(BatchHandler):
                 row_errors["period"] = [str(exc)]
                 period = None
 
-            if loan is not None and amount is not None:
+            if loan is not None and period is not None:
+                key = (loan.pk, period)
+                if key in already:
+                    row_errors["period"] = [f"Payroll repayments for {loan.reference} in {period:%B %Y} have already been recorded."]
+                elif key in in_file:
+                    row_errors["period"] = [f"{loan.reference} for {period:%B %Y} is already on row {in_file[key]}."]
+                else:
+                    in_file[key] = row_number
+
+            if loan is not None and amount is not None and not row_errors:
                 available = repayable(loan) - claimed[loan.pk]
                 if amount > available:
                     row_errors["amount"] = [f"More than the ₦{available:,.2f} still owed on {loan.reference}."]
@@ -146,6 +177,11 @@ class LoanRepaymentBatchHandler(BatchHandler):
             if loan.status not in Loan.RUNNING_STATUSES:
                 problems.append({"reference": entry.reference, "member": entry.member.membership_number,
                                  "errors": [f"{loan.reference} is now {loan.get_status_display().lower()}."]})
+                continue
+            other = _payroll_months({loan.member_id: [loan]}, exclude_batch=batch)
+            if any(e.period and (loan.pk, e.period) in other for e in entries if e.loan_id == loan.pk):
+                problems.append({"reference": entry.reference, "member": entry.member.membership_number,
+                                 "errors": [f"Another payroll batch has since recorded {loan.reference} for the same month."]})
                 continue
             available = repayable(loan, exclude_batch=batch)
             if totals[loan.pk] > available:

@@ -55,6 +55,21 @@ Re-run after the guarantor and monthly-contribution features. `pip-audit`, `npm 
 
 Tests: `backend/tests/test_security_hardening.py`.
 
+A second pass looked for loopholes in the business rules as well as the code:
+
+| # | Finding | Severity | Fix |
+|---|---|---|---|
+| 14 | **Spreadsheet formula injection.** Text starting with `=`, `+`, `-` or `@` (a loan purpose, reason or description) was written into Excel exports as a live formula, which would run when an officer opened the file | High | Every export (reports, statements, deduction schedules, templates, import reports) is saved through one helper that stores such text as plain text |
+| 15 | The support console (`/django-admin/`) has its own sign-in page, outside the API login throttle and failed-login audit | Medium | Failed console sign-ins are audited (`auth.admin_login_failed`), and an address is locked out for 15 minutes after 5 failures |
+| 16 | **A guarantor could close their account while the loan they guarantee was still running**, be paid out, and leave the loan unsecured | High (financial) | Closure approval and execution are refused while the member guarantees a running loan; the settlement statement lists those guarantees (BR-30) |
+| 17 | Loan approval counted "accepted" guarantors without re-checking them, so a guarantor suspended, deactivated or leaving after accepting still counted. A suspended member could also accept | Medium (financial) | Only guarantors who are active and not closing their account can be chosen, accept, or count at approval |
+| 18 | **The same month's payroll loan repayments could be posted twice**, by uploading the file again or repeating a row, double-deducting members as long as the total stayed within what was owed | High (financial) | A payroll repayment batch is refused for a loan and month already covered by another payroll batch (posted or awaiting approval), or repeated in the same file, and re-checked at approval. Cash repayments in the same month are still allowed |
+| 19 | After a password change, refresh tokens were revoked but an access token already issued kept working for up to 15 minutes | Low | Access tokens issued before the last password change are refused, so a reset after a suspected compromise takes effect at once |
+
+| 20 | **Guarantor exposure was unlimited**: a member with no savings could guarantee any number of loans | Medium (financial) | A member may guarantee loans totalling at most **2× their savings** (cooperative setting `guarantor_savings_multiple`; blank means no limit). Checked when the guarantor is chosen, when the application is submitted and when they accept. Applicants are never told another member's savings (BR-31) |
+
+Tests: `backend/tests/test_security_hardening.py`, `backend/apps/loans/tests/test_loopholes.py`.
+
 ## Where things are kept
 
 - **Passwords:** only as one-way Argon2 hashes, in PostgreSQL table `accounts_user` (column `password`). They cannot be read back.

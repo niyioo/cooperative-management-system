@@ -96,3 +96,66 @@ class TestMonthlyContributionCeiling:
         SavingsAccount.objects.get_or_create(member=member, product=regular, cycle=None)
         response = as_user(member.user).post("/api/v1/me/savings/monthly-contribution/", {"amount": "5000000"}, format="json")
         assert response.status_code == 200
+
+
+class TestSpreadsheetFormulaInjection:
+    def test_text_that_looks_like_a_formula_is_exported_as_plain_text(self):
+        import io
+
+        from openpyxl import Workbook, load_workbook
+
+        from apps.common.spreadsheets import workbook_bytes
+
+        workbook = Workbook()
+        workbook.active.append(['=HYPERLINK("http://example.invalid","Click")', "+1+2", "@SUM(A1)", "Ada", 5000])
+        cells = load_workbook(io.BytesIO(workbook_bytes(workbook))).active[1]
+        assert [c.data_type for c in cells] == ["s", "s", "s", "s", "n"]
+        assert cells[0].value.startswith("=HYPERLINK")  # kept, but as text
+
+    def test_member_statement_export_keeps_descriptions_as_text(self, as_user, member):
+        import io
+
+        from django.utils import timezone
+        from openpyxl import load_workbook
+
+        from apps.ledger.models import Transaction
+        from apps.savings.models import SavingsAccount, SavingsProduct
+
+        account, _ = SavingsAccount.objects.get_or_create(member=member, product=SavingsProduct.objects.get(code="REGULAR"), cycle=None)
+        Transaction.objects.create(member=member, txn_type="SAVINGS_OPENING_BALANCE", entry_side="CREDIT", amount=Decimal("100"),
+                                   savings_account=account, status="POSTED", posted_at=timezone.now(), description="=1+1")
+        response = as_user(member.user).get("/api/v1/me/transactions/statement/", {"format": "xlsx"})
+        assert response.status_code == 200
+        sheet = load_workbook(io.BytesIO(response.content)).active
+        assert all(c.data_type != "f" for row in sheet.iter_rows() for c in row)
+
+
+class TestSupportConsoleSignIn:
+    def test_repeated_failures_lock_the_address_out_and_are_audited(self, client, super_admin):
+        from django.conf import settings
+
+        from apps.audit.models import AuditLog
+
+        url = f"/{settings.DJANGO_ADMIN_URL}login/"
+        for _ in range(5):
+            assert client.post(url, {"username": super_admin.email, "password": "wrong"}).status_code == 200
+        assert client.post(url, {"username": super_admin.email, "password": "wrong"}).status_code == 429
+        assert AuditLog.objects.filter(action="auth.admin_login_failed").count() == 5
+
+
+class TestPasswordChangeEndsSessions:
+    def test_access_tokens_issued_before_a_password_change_stop_working(self, as_user, member):
+        import datetime
+
+        from django.utils import timezone
+
+        client = as_user(member.user)
+        assert client.get("/api/v1/me/dashboard/").status_code == 200
+        type(member.user).objects.filter(pk=member.user.pk).update(last_password_change=timezone.now() + datetime.timedelta(seconds=5))
+        response = client.get("/api/v1/me/dashboard/")
+        assert response.status_code == 401
+
+    def test_a_fresh_sign_in_after_the_change_works(self, api, member, password):
+        response = api.post("/api/v1/auth/login/", {"identifier": member.user.email, "password": password}, format="json")
+        api.credentials(HTTP_AUTHORIZATION=f"Bearer {response.data['access']}")
+        assert api.get("/api/v1/me/dashboard/").status_code == 200

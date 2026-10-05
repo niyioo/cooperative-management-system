@@ -118,7 +118,7 @@ class Command(BaseCommand):
         # Savings: regular opening balances, then Christmas Savings for this year.
         regular = SavingsProduct.objects.get(code="REGULAR")
         christmas = SavingsProduct.objects.get(code="CHRISTMAS")
-        for member, amount in zip(everyone, ("185000", "92000", "60000", "75500", "40000")):
+        for member, amount in zip(everyone, ("185000", "92000", "110000", "75500", "40000")):
             account = SavingsAccount.objects.get(member=member, product=regular)
             Transaction.objects.create(member=member, txn_type="SAVINGS_OPENING_BALANCE", entry_side="CREDIT", amount=D(amount),
                                        savings_account=account, value_date=datetime.date(year, 1, 2), status="POSTED",

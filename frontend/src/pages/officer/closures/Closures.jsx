@@ -78,7 +78,13 @@ function Settlement({ statement, frozen }) {
       </Table>
       {(!statement.can_settle || statement.pending_entries > 0) && (
         <CardBody className="space-y-2">
-          {!statement.can_settle && <Alert tone="warning">Loans exceed the member's funds by {formatNaira(-Number(statement.net_payable))}. The shortfall must be repaid before the account can be closed.</Alert>}
+          {Number(statement.net_payable) < 0 && <Alert tone="warning">Loans exceed the member's funds by {formatNaira(-Number(statement.net_payable))}. The shortfall must be repaid before the account can be closed.</Alert>}
+          {statement.guarantees?.length > 0 && (
+            <Alert tone="warning" title="This member guarantees loans that are still running">
+              {statement.guarantees.map((g) => `${g.loan_application} (${g.borrower}, ${formatNaira(g.amount_guaranteed)})`).join('; ')}.
+              {' '}A guarantor stays liable until those loans are repaid, so the account cannot be closed before then.
+            </Alert>
+          )}
           {statement.pending_entries > 0 && <Alert tone="warning">{statement.pending_entries} transaction(s) for this member are awaiting approval. Approve or reject them before executing the closure.</Alert>}
         </CardBody>
       )}

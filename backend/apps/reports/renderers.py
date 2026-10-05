@@ -21,6 +21,7 @@ from reportlab.lib.units import mm
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from apps.common.spreadsheets import workbook_bytes
 from apps.common.serializers import money_to_str
 from apps.configuration.models import CooperativeSettings
 
@@ -152,9 +153,7 @@ def to_xlsx(result, lookups, user):
     if len(result.rows) > XLSX_ROWS:
         sheet.append([f"Only the first {XLSX_ROWS:,} of {len(result.rows):,} rows are included. Narrow the filters for the rest."])
 
-    buffer = io.BytesIO()
-    workbook.save(buffer)
-    return buffer.getvalue()
+    return workbook_bytes(workbook)
 
 
 # ---------------------------------------------------------------------------

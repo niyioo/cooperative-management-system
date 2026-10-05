@@ -315,6 +315,7 @@ Conventions for every table:
 - **Closure:** `closure_disables_portal_login` (True)
 - **Maker–checker:** `maker_checker_types` (array of transaction types that require approval)
 - **Loans:** `loan_overdue_grace_days` (e.g. 7)
+- **Guarantees:** `guarantor_savings_multiple` (2: total guarantees may not exceed 2× the member's savings; blank means no limit)
 - **Monthly contribution:** `contributions_tracked_from` (first month arrears are counted from; blank means from each account's opening)
 - **Security:** `session_idle_timeout_minutes`
 
@@ -1056,6 +1057,8 @@ The **Enforced by** column says where each rule is guaranteed. A frontend check 
 | BR-27 | Money uses Decimal and rounds half-up to kobo | `MoneyField` + calculators |
 | BR-28 | Every loan application needs at least one guarantor, chosen by membership number, who must accept before approval. Guarantors are notified in the portal and by e-mail. | `CHECK guarantors_required >= 1` on loan products; submit and approve guards in the loan services; tests in `loans/tests/test_guarantors.py` |
 | BR-29 | Every member makes a statutory monthly contribution into Regular Savings, deducted through payroll: an amount they choose, not below the product minimum (members change it from next month). Shortfalls are tracked as arrears, and a monthly deduction schedule is produced for payroll. | `savings/statutory.py` (history in `MonthlyContributionChange`); deduction schedule in the contributions batch layout; tests in `savings/tests/test_monthly_contribution.py` |
+| BR-30 | A guarantor stays liable until the loans they guarantee are repaid: their account cannot be closed before then, and only guarantors who are active and not closing their account can be chosen, accept, or count at approval. A payroll repayment batch can cover a loan only once per month. | `closures/services._assert_no_running_guarantees`; `loans/selectors.guarantor_problem`; `loans/batches._payroll_months`; tests in `loans/tests/test_loopholes.py` |
+| BR-31 | A member may guarantee loans totalling at most a multiple of their savings (2× by default, `guarantor_savings_multiple`; blank means no limit). Only accepted guarantees on applications in progress and running loans count. | `loans/selectors.guarantee_room`; checked when choosing, at submission and on acceptance; tests in `loans/tests/test_loopholes.py` |
 
 ---
 

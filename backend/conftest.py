@@ -4,6 +4,21 @@ from rest_framework.test import APIClient
 from tests.factories import DEFAULT_PASSWORD, MemberFactory, UserFactory, make_officer
 
 
+@pytest.fixture(autouse=True)
+def _no_guarantee_limit(request, db):
+    """
+    Most tests use brand-new members, with no savings, as guarantors. The
+    guarantee limit (BR-31) is switched off for them; tests that cover it
+    are marked @pytest.mark.guarantee_limit and keep the 2x default.
+    """
+    if request.node.get_closest_marker("guarantee_limit"):
+        return
+    from apps.configuration.models import CooperativeSettings
+
+    CooperativeSettings.load()
+    CooperativeSettings.objects.update(guarantor_savings_multiple=None)
+
+
 @pytest.fixture
 def api():
     return APIClient()

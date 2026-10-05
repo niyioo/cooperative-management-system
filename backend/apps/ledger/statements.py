@@ -15,6 +15,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from apps.common.spreadsheets import workbook_bytes
 from apps.configuration.models import CooperativeSettings
 
 from .choices import EntrySide, TransactionStatus
@@ -95,9 +96,7 @@ def build_xlsx(member, date_from=None, date_to=None):
             cell.alignment = Alignment(horizontal="right")
     for column, width in zip("ABCDEFG", (12, 18, 42, 34, 14, 14, 12)):
         sheet.column_dimensions[column].width = width
-    buffer = io.BytesIO()
-    workbook.save(buffer)
-    return buffer.getvalue()
+    return workbook_bytes(workbook)
 
 
 def _money(value):

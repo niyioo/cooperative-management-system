@@ -164,6 +164,21 @@ def build_template(sheet_title, columns, example_rows=(), notes=()):
     instructions.column_dimensions["A"].width = 28
     instructions.column_dimensions["C"].width = 70
 
+    return workbook_bytes(workbook)
+
+
+def workbook_bytes(workbook):
+    """
+    The workbook as .xlsx bytes. Text that looks like a formula (=, +, -, @) is
+    kept as plain text: openpyxl would otherwise store it as a live formula, and
+    names, reasons or descriptions typed by users could then run in Excel
+    (spreadsheet formula injection). No export uses formulas on purpose.
+    """
+    for sheet in workbook.worksheets:
+        for row in sheet.iter_rows():
+            for cell in row:
+                if cell.data_type == "f":
+                    cell.data_type = "s"
     buffer = io.BytesIO()
     workbook.save(buffer)
     return buffer.getvalue()

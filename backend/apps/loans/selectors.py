@@ -1,13 +1,14 @@
 from datetime import timedelta
+from decimal import Decimal
 
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.utils import timezone
 
 from apps.configuration.models import CooperativeSettings
 from apps.ledger.choices import TransactionStatus
 from apps.ledger.selectors import ZERO, net_by
 
-from .models import Loan, LoanApplication, RepaymentAllocation
+from .models import Loan, LoanApplication, LoanGuarantor, RepaymentAllocation
 
 
 def member_loan_position(member):
@@ -128,3 +129,59 @@ def overdue_loans(today=None):
             result.append({"loan": loan, "arrears": arrears, "outstanding": outstanding.get(loan.pk, ZERO)})
     result.sort(key=lambda r: (-r["arrears"]["days_overdue"], -r["arrears"]["amount"]))
     return result
+
+
+def running_guarantees(member):
+    """Accepted guarantees by `member` on loans that are still running (they stay liable until repaid)."""
+    return (
+        LoanGuarantor.objects.filter(
+            guarantor=member,
+            status=LoanGuarantor.Status.ACCEPTED,
+            application__loans__status__in=Loan.RUNNING_STATUSES,
+        )
+        .select_related("application__member")
+        .distinct()
+    )
+
+
+def guarantor_problem(member):
+    """Why `member` cannot stand (or keep standing) as a guarantor right now, or None."""
+    from apps.closures.models import AccountClosureRequest
+    from apps.members.models import MemberStatus
+
+    if member.status != MemberStatus.ACTIVE:
+        return f"{member.full_name} is not an active member."
+    if AccountClosureRequest.objects.filter(member=member, status__in=AccountClosureRequest.OPEN_STATUSES).exists():
+        return f"{member.full_name} has asked to close their account."
+    return None
+
+
+def guarantee_exposure(member, exclude=None):
+    """
+    What `member` already stands behind: their accepted shares on applications
+    still in progress and on loans that are still running.
+    """
+    accepted = LoanGuarantor.objects.filter(guarantor=member, status=LoanGuarantor.Status.ACCEPTED).filter(
+        Q(application__status__in=[LoanApplication.Status.SUBMITTED, LoanApplication.Status.UNDER_REVIEW,
+                                   LoanApplication.Status.APPROVED])
+        | Q(application__loans__status__in=Loan.RUNNING_STATUSES)
+    )
+    if exclude is not None:
+        accepted = accepted.exclude(pk=exclude.pk)
+    return sum((amount for _, amount in set(accepted.values_list("pk", "amount_guaranteed"))), ZERO)
+
+
+def guarantee_limit(member):
+    """The most `member` may guarantee in total (BR-31), or None when there is no limit."""
+    from .eligibility import eligible_savings
+
+    multiple = CooperativeSettings.load().guarantor_savings_multiple
+    if multiple is None:
+        return None
+    return (eligible_savings(member) * multiple).quantize(Decimal("0.01"))
+
+
+def guarantee_room(member, exclude=None):
+    """How much more `member` may guarantee, or None when there is no limit."""
+    limit = guarantee_limit(member)
+    return None if limit is None else limit - guarantee_exposure(member, exclude=exclude)

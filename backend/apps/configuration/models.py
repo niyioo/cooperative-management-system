@@ -1,4 +1,7 @@
+from decimal import Decimal
+
 from django.contrib.postgres.fields import ArrayField
+from django.core.validators import MinValueValidator
 from django.db import models
 
 from apps.common.models import TimeStampedModel
@@ -61,6 +64,15 @@ class CooperativeSettings(models.Model):
         help_text="Transaction types that must be approved by a second officer before posting.",
     )
     loan_overdue_grace_days = models.PositiveSmallIntegerField(default=7)
+    guarantor_savings_multiple = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        default=Decimal("2.00"),
+        validators=[MinValueValidator(Decimal("0.01"))],
+        help_text="A member may guarantee loans totalling at most this multiple of their savings. Blank means no limit.",
+    )
     contributions_tracked_from = models.DateField(
         null=True,
         blank=True,

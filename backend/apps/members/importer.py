@@ -5,7 +5,6 @@ Flow: upload -> parse -> validate every row (dry run) -> officer reviews the
 report -> commit. Commit is all-or-nothing and only allowed when no row has
 errors, so the membership register never ends up half-imported.
 """
-import io
 import re
 from dataclasses import dataclass
 from datetime import date
@@ -18,7 +17,15 @@ from django.db.models.functions import Upper
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 
-from apps.common.spreadsheets import SpreadsheetError, cell_text, map_columns, normalise_header, parse_date, read_table
+from apps.common.spreadsheets import (
+    SpreadsheetError,
+    cell_text,
+    map_columns,
+    normalise_header,
+    parse_date,
+    read_table,
+    workbook_bytes,
+)
 from apps.configuration.models import Department
 
 from .models import Member, MemberStatus
@@ -329,9 +336,7 @@ def build_template():
     notes.column_dimensions["A"].width = 28
     notes.column_dimensions["C"].width = 70
 
-    buffer = io.BytesIO()
-    workbook.save(buffer)
-    return buffer.getvalue()
+    return workbook_bytes(workbook)
 
 
 def read_member_table(uploaded_file):

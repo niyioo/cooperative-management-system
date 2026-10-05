@@ -21,6 +21,7 @@ from django.db import transaction
 from django.db.models import Q, Sum
 from django.utils import timezone
 
+from apps.common.spreadsheets import workbook_bytes
 from apps.accounts.permissions import assert_not_self, require_perm
 from apps.accounts.perms import P
 from apps.audit.services import record
@@ -427,8 +428,6 @@ def deduction_schedule(period, *, include_arrears=True, today=None):
 
 def schedule_workbook(schedule, cooperative_name):
     """The schedule as .xlsx: the upload sheet first, then a breakdown and notes."""
-    import io
-
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill
 
@@ -486,6 +485,4 @@ def schedule_workbook(schedule, cooperative_name):
     about.column_dimensions["B"].width = 30
     about["A1"].font = Font(bold=True, size=13)
 
-    buffer = io.BytesIO()
-    workbook.save(buffer)
-    return buffer.getvalue()
+    return workbook_bytes(workbook)

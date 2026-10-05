@@ -23,6 +23,7 @@ from apps.ledger.choices import BatchStatus, BatchType, TransactionStatus, Trans
 from apps.ledger.models import Transaction, TransactionBatch
 from apps.ledger.selectors import ZERO, net_by, with_balance
 from apps.loans.models import Loan
+from apps.loans.selectors import running_guarantees
 from apps.members.models import Member, MembershipStatusChange, MemberStatus
 from apps.notifications import services as notifications
 from apps.savings.models import ProductKind, SavingsAccount
@@ -116,6 +117,11 @@ def settlement_statement(member):
         {"financial_year": d.cycle.financial_year, "net_amount": d.net_amount}
         for d in MemberDividend.objects.filter(member=member, status=MemberDividend.Status.APPROVED).select_related("cycle")
     ]
+    guarantees = [
+        {"loan_application": g.application.reference, "borrower": g.application.member.full_name,
+         "borrower_number": g.application.member.membership_number, "amount_guaranteed": g.amount_guaranteed}
+        for g in running_guarantees(member)
+    ]
     savings_total = sum((s["balance"] for s in savings), ZERO)
     investment_total = sum((i["balance"] for i in investments), ZERO)
     loan_total = sum((loan["outstanding"] for loan in loans), ZERO)
@@ -125,13 +131,26 @@ def settlement_statement(member):
         "investments": investments,
         "loans": loans,
         "unpaid_dividends": dividends,
+        "guarantees": guarantees,
         "savings_total": savings_total,
         "investment_total": investment_total,
         "loan_total": loan_total,
         "net_payable": net,
-        "can_settle": net >= 0,
+        "can_settle": net >= 0 and not guarantees,
         "pending_entries": Transaction.objects.pending().filter(member=member).count(),
     }
+
+
+def _assert_no_running_guarantees(member):
+    """BR-30: a guarantor stays liable until the loans they guarantee are repaid, so they cannot close first."""
+    guarantees = list(running_guarantees(member))
+    if guarantees:
+        loans = ", ".join(f"{g.application.reference} ({g.application.member.full_name})" for g in guarantees)
+        raise DomainError(
+            f"{member.full_name} guarantees loans that are still running: {loans}. "
+            "The account can be closed once those loans are repaid.",
+            code="guarantor_of_running_loan",
+        )
 
 
 @transaction.atomic
@@ -158,6 +177,7 @@ def approve_request(actor, closure_request, *, notes=""):
     closure_request = _locked(closure_request)
     assert_not_self(actor, closure_request.member, "approve the closure of")
     _assert_status(closure_request, [STATUS.UNDER_REVIEW], "approved (it must be reviewed first)")
+    _assert_no_running_guarantees(closure_request.member)
     closure_request.status = STATUS.APPROVED
     closure_request.decided_by = actor
     closure_request.decided_at = timezone.now()
@@ -213,6 +233,7 @@ def execute(actor, closure_request, *, value_date=None):
     _assert_status(closure_request, [STATUS.APPROVED], "executed")
     if open_settlement_batch(closure_request):
         raise DomainError("A settlement batch for this closure is already awaiting approval.", code="settlement_in_progress")
+    _assert_no_running_guarantees(member)
     statement = settlement_statement(member)
     if statement["pending_entries"]:
         raise DomainError("This member has entries awaiting approval. Approve or reject them first.", code="pending_entries")
