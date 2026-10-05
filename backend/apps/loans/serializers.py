@@ -1,63 +1,255 @@
-from rest_framework import serializers
-from .models import LoanProduct, Loan, LoanGuarantor, LoanRepayment
-from apps.members.models import Member
+from decimal import Decimal
 
-class NestedMemberSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Member
-        fields = ['id', 'first_name', 'last_name', 'membership_id']
+from django.utils import timezone
+from rest_framework import serializers
+
+from apps.common.serializers import PeriodField, money_to_str
+from apps.members.models import Member
+from apps.savings.serializers import MemberBriefSerializer
+
+from .calculators import schedule_for_product
+from .models import Loan, LoanApplication, LoanApplicationDocument, LoanGuarantor, LoanProduct, LoanRepayment
+
+MONEY = {"max_digits": 15, "decimal_places": 2}
+POSITIVE = {"min_value": Decimal("0.01"), **MONEY}
+
 
 class LoanProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = LoanProduct
-        fields = '__all__'
+        fields = [
+            "id",
+            "name",
+            "code",
+            "description",
+            "interest_rate",
+            "interest_rate_basis",
+            "interest_method",
+            "interest_collection",
+            "min_amount",
+            "max_amount",
+            "max_savings_multiple",
+            "min_term_months",
+            "max_term_months",
+            "allowed_terms",
+            "min_membership_months",
+            "max_active_loans",
+            "guarantors_required",
+            "required_documents",
+            "allow_topup",
+            "is_active",
+        ]
+        extra_kwargs = {"name": {"validators": []}, "code": {"validators": []}}
 
-class LoanGuarantorSerializer(serializers.ModelSerializer):
-    # Added full name for better UI display
-    guarantor_name = serializers.SerializerMethodField()
+
+def schedule_preview(product, amount, term_months, disbursed_on=None):
+    """A quote: what the loan would cost and the monthly repayment."""
+    schedule = schedule_for_product(product, amount, term_months, disbursed_on or timezone.localdate())
+    return money_to_str(
+        {
+            "principal": Decimal(amount).quantize(Decimal("0.01")),
+            "total_interest": schedule.total_interest,
+            "total_payable": schedule.total_payable,
+            "monthly_payment": schedule.monthly_payment,
+            "interest_deducted_upfront": product.interest_collection == "UPFRONT",
+            "first_due_date": schedule.first_due_date,
+            "maturity_date": schedule.maturity_date,
+            "instalments": [
+                {"number": i.number, "due_date": i.due_date, "principal": i.principal, "interest": i.interest, "total": i.total}
+                for i in schedule.instalments
+            ],
+        }
+    )
+
+
+class QuoteQuerySerializer(serializers.Serializer):
+    amount = serializers.DecimalField(**POSITIVE)
+    term_months = serializers.IntegerField(min_value=1, max_value=600)
+
+
+class EligibilityQuerySerializer(serializers.Serializer):
+    member = serializers.PrimaryKeyRelatedField(queryset=Member.objects.all())
+    product = serializers.PrimaryKeyRelatedField(queryset=LoanProduct.objects.all())
+    amount = serializers.DecimalField(required=False, **POSITIVE)
+    term_months = serializers.IntegerField(required=False, min_value=1)
+
+
+# ---------------------------------------------------------------------------
+# Applications
+# ---------------------------------------------------------------------------
+
+class ApplicationDocumentSerializer(serializers.ModelSerializer):
+    uploaded_by = serializers.CharField(source="uploaded_by.full_name", default=None, read_only=True)
+
+    class Meta:
+        model = LoanApplicationDocument
+        fields = ["id", "title", "uploaded_by", "created_at"]
+
+
+class GuarantorSerializer(serializers.ModelSerializer):
+    guarantor = MemberBriefSerializer(read_only=True)
+    status_label = serializers.CharField(source="get_status_display", read_only=True)
 
     class Meta:
         model = LoanGuarantor
-        fields = ['id', 'guarantor_member', 'guarantor_name', 'amount_guaranteed', 'status', 'created_at']
-        read_only_fields = ['id', 'status', 'created_at']
+        fields = ["id", "guarantor", "amount_guaranteed", "status", "status_label", "requested_at", "responded_at", "decline_reason"]
 
-    def get_guarantor_name(self, obj):
-        return f"{obj.guarantor_member.first_name} {obj.guarantor_member.last_name}"
 
-class LoanRepaymentSerializer(serializers.ModelSerializer):
+class LoanApplicationListSerializer(serializers.ModelSerializer):
+    member = MemberBriefSerializer(read_only=True)
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    status_label = serializers.CharField(source="get_status_display", read_only=True)
+
     class Meta:
-        model = LoanRepayment
-        fields = '__all__'
-        read_only_fields = ['id', 'payment_date', 'received_by', 'created_at']
+        model = LoanApplication
+        fields = [
+            "id",
+            "reference",
+            "member",
+            "product",
+            "product_name",
+            "amount_requested",
+            "term_months",
+            "approved_amount",
+            "approved_term_months",
+            "status",
+            "status_label",
+            "submitted_at",
+            "created_at",
+        ]
+
+
+class LoanApplicationDetailSerializer(LoanApplicationListSerializer):
+    reviewed_by = serializers.CharField(source="reviewed_by.full_name", default=None, read_only=True)
+    decided_by = serializers.CharField(source="decided_by.full_name", default=None, read_only=True)
+    documents = ApplicationDocumentSerializer(many=True, read_only=True)
+    guarantors = GuarantorSerializer(many=True, read_only=True)
+    loan = serializers.SerializerMethodField()
+    quote = serializers.SerializerMethodField()
+
+    class Meta(LoanApplicationListSerializer.Meta):
+        fields = LoanApplicationListSerializer.Meta.fields + [
+            "purpose",
+            "eligibility_snapshot",
+            "reviewed_by",
+            "reviewed_at",
+            "review_notes",
+            "info_request_message",
+            "decided_by",
+            "decided_at",
+            "decision_reason",
+            "cancelled_at",
+            "documents",
+            "guarantors",
+            "loan",
+            "quote",
+        ]
+
+    def get_loan(self, obj) -> dict | None:
+        loan = obj.loans.exclude(status=Loan.Status.CANCELLED).first()
+        return {"id": str(loan.pk), "reference": loan.reference, "status": loan.status} if loan else None
+
+    def get_quote(self, obj) -> dict:
+        amount = obj.approved_amount or obj.amount_requested
+        term = obj.approved_term_months or obj.term_months
+        return schedule_preview(obj.product, amount, term)
+
+
+class ApplicationOnBehalfSerializer(serializers.Serializer):
+    member = serializers.PrimaryKeyRelatedField(queryset=Member.objects.all())
+    product = serializers.PrimaryKeyRelatedField(queryset=LoanProduct.objects.all())
+    amount_requested = serializers.DecimalField(**POSITIVE)
+    term_months = serializers.IntegerField(min_value=1)
+    purpose = serializers.CharField(max_length=2000)
+    guarantors = serializers.ListField(
+        child=serializers.CharField(max_length=30), allow_empty=False,
+        help_text="Guarantors' membership numbers. They are notified, in the portal and by e-mail, to accept or decline.",
+    )
+
+
+class ReviewSerializer(serializers.Serializer):
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class ReturnSerializer(serializers.Serializer):
+    message = serializers.CharField(max_length=2000)
+
+
+class ApproveSerializer(serializers.Serializer):
+    approved_amount = serializers.DecimalField(required=False, **POSITIVE)
+    approved_term_months = serializers.IntegerField(required=False, min_value=1)
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class RejectSerializer(serializers.Serializer):
+    reason = serializers.CharField(max_length=2000)
+
+
+class DisburseSerializer(serializers.Serializer):
+    disbursed_on = serializers.DateField(required=False)
+    external_reference = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
+
+
+# ---------------------------------------------------------------------------
+# Loans
+# ---------------------------------------------------------------------------
 
 class LoanSerializer(serializers.ModelSerializer):
-    # For GET requests (React Table displays)
-    member = NestedMemberSerializer(read_only=True)
-    product = LoanProductSerializer(source='loan_product', read_only=True)
-    
-    # Matches the 'balance' key used in React state
-    balance = serializers.DecimalField(source='balance_remaining', max_digits=15, decimal_places=2, read_only=True)
-    
-    # For POST requests (React Form Submission)
-    member_id = serializers.PrimaryKeyRelatedField(
-        queryset=Member.objects.all(), source='member', write_only=True
-    )
-    loan_product_id = serializers.PrimaryKeyRelatedField(
-        queryset=LoanProduct.objects.all(), source='loan_product', write_only=True
-    )
-
-    guarantors = LoanGuarantorSerializer(many=True, read_only=True)
-    repayments = LoanRepaymentSerializer(many=True, read_only=True)
+    member = MemberBriefSerializer(read_only=True)
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    status_label = serializers.CharField(source="get_status_display", read_only=True)
+    outstanding = serializers.SerializerMethodField()
 
     class Meta:
         model = Loan
         fields = [
-            'id', 'loan_id', 'member', 'member_id', 'product', 'loan_product_id', 
-            'principal_amount', 'duration_months', 'purpose', 'interest_amount', 
-            'total_payable', 'balance', 'status', 'application_date', 
-            'disbursed_at', 'guarantors', 'repayments'
+            "id",
+            "reference",
+            "member",
+            "product",
+            "product_name",
+            "principal",
+            "total_interest",
+            "outstanding",
+            "interest_rate",
+            "interest_rate_basis",
+            "interest_method",
+            "interest_collection",
+            "term_months",
+            "disbursed_on",
+            "first_due_date",
+            "maturity_date",
+            "status",
+            "status_label",
+            "completed_on",
+            "defaulted_on",
         ]
-        read_only_fields = [
-            'id', 'loan_id', 'interest_amount', 'total_payable', 
-            'status', 'application_date', 'disbursed_at'
-        ]
+
+    def get_outstanding(self, obj) -> str:
+        # `balance` is annotated by with_balance(): credits - debits, so owed = -balance.
+        return f"{-obj.balance:.2f}"
+
+
+class LoanRepaymentOutSerializer(serializers.ModelSerializer):
+    reference = serializers.CharField(source="transaction.reference", read_only=True)
+    amount = serializers.DecimalField(source="transaction.amount", read_only=True, **MONEY)
+    value_date = serializers.DateField(source="transaction.value_date", read_only=True)
+    status = serializers.CharField(source="transaction.status", read_only=True)
+    description = serializers.CharField(source="transaction.description", read_only=True)
+
+    class Meta:
+        model = LoanRepayment
+        fields = ["id", "reference", "amount", "value_date", "status", "description",
+                  "principal_component", "interest_component", "penalty_component"]
+
+
+class RepaymentInSerializer(serializers.Serializer):
+    amount = serializers.DecimalField(**POSITIVE)
+    value_date = serializers.DateField(required=False)
+    period = PeriodField(required=False, allow_null=True)
+    description = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
+    external_reference = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
+
+
+class MarkDefaultSerializer(serializers.Serializer):
+    reason = serializers.CharField(max_length=2000)

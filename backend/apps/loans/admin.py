@@ -1,100 +1,76 @@
-import uuid
-from django.contrib import admin, messages
-from django.utils import timezone
-from django.db import transaction
+from django.contrib import admin
 
-from .models import LoanProduct, Loan, LoanGuarantor, LoanRepayment
-# ✅ Import the Savings models so we can deposit the money
-from apps.savings.models import SavingsAccount, SavingsTransaction 
+from apps.common.admin import AuditedAdminMixin, NoDeleteAdminMixin, ReadOnlyAdminMixin
+
+from .models import (
+    Loan,
+    LoanApplication,
+    LoanApplicationDocument,
+    LoanGuarantor,
+    LoanProduct,
+    LoanRepayment,
+    RepaymentAllocation,
+    RepaymentInstallment,
+)
+
+# Workflow actions (approve, disburse, repay) live in the officer portal so they
+# always go through the service layer, ledger and audit log. The Django admin
+# is read-mostly for loans.
+
 
 @admin.register(LoanProduct)
-class LoanProductAdmin(admin.ModelAdmin):
-    list_display = ('name', 'interest_rate', 'max_amount', 'max_duration_months', 'is_active')
-    list_filter = ('is_active',)
-    search_fields = ('name',)
+class LoanProductAdmin(AuditedAdminMixin, NoDeleteAdminMixin, admin.ModelAdmin):
+    list_display = ("name", "code", "interest_rate", "interest_rate_basis", "interest_method", "max_amount", "max_term_months", "is_active")
+    list_filter = ("is_active", "interest_method", "interest_rate_basis")
+    search_fields = ("name", "code")
+
+
+class LoanApplicationDocumentInline(ReadOnlyAdminMixin, admin.TabularInline):
+    model = LoanApplicationDocument
+    extra = 0
+    fields = ("title", "file", "uploaded_by", "created_at")
+    readonly_fields = fields
+
+
+class LoanGuarantorInline(ReadOnlyAdminMixin, admin.TabularInline):
+    model = LoanGuarantor
+    extra = 0
+    fields = ("guarantor", "amount_guaranteed", "status", "responded_at")
+    readonly_fields = fields
+
+
+@admin.register(LoanApplication)
+class LoanApplicationAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
+    list_display = ("reference", "member", "product", "amount_requested", "term_months", "status", "submitted_at")
+    list_filter = ("status", "product")
+    search_fields = ("reference", "member__membership_number", "member__last_name")
+    inlines = [LoanGuarantorInline, LoanApplicationDocumentInline]
+
+
+class RepaymentInstallmentInline(ReadOnlyAdminMixin, admin.TabularInline):
+    model = RepaymentInstallment
+    extra = 0
+    fields = ("number", "due_date", "principal_due", "interest_due")
+    readonly_fields = fields
+
 
 @admin.register(Loan)
-class LoanAdmin(admin.ModelAdmin):
-    list_display = ('loan_id', 'member', 'loan_product', 'principal_amount', 'status', 'application_date')
-    list_filter = ('status', 'loan_product', 'application_date')
-    search_fields = ('loan_id', 'member__membership_id', 'member__first_name', 'member__last_name')
-    readonly_fields = ('loan_id', 'interest_amount', 'total_payable', 'balance_remaining')
-    
-    # ✅ 1. Added 'disburse_loans' to the actions list
-    actions = ['approve_loans', 'reject_loans', 'disburse_loans']
-
-    @admin.action(description='✅ Approve selected loans')
-    def approve_loans(self, request, queryset):
-        updated_count = 0
-        for loan in queryset:
-            loan.status = 'APPROVED'
-            loan.save()
-            updated_count += 1
-        self.message_user(request, f"Successfully approved {updated_count} loan(s).", level=messages.SUCCESS)
-
-    @admin.action(description='❌ Reject selected loans')
-    def reject_loans(self, request, queryset):
-        updated_count = 0
-        for loan in queryset:
-            loan.status = 'REJECTED'
-            loan.save()
-            updated_count += 1
-        self.message_user(request, f"Successfully rejected {updated_count} loan(s).", level=messages.SUCCESS)
-
-    # ✅ 2. The new "Disburse Funds" Engine
-    @admin.action(description='💸 Disburse selected APPROVED loans')
-    def disburse_loans(self, request, queryset):
-        disbursed_count = 0
-        
-        for loan in queryset:
-            # Prevent accidental double-disbursements or disbursing pending loans
-            if loan.status != 'APPROVED':
-                self.message_user(request, f"Skipped {loan.loan_id}: Loan must be APPROVED before disbursement.", level=messages.WARNING)
-                continue
-
-            try:
-                # transaction.atomic() ensures that if anything fails, no partial data is saved
-                with transaction.atomic():
-                    # 1. Update the Loan Status & Date
-                    loan.status = 'ACTIVE'
-                    loan.disbursed_at = timezone.now()
-                    loan.save()
-
-                    # 2. Find (or create) the member's Savings Account
-                    savings_account, created = SavingsAccount.objects.get_or_create(member=loan.member)
-
-                    # 3. Deposit the funds into the savings balance
-                    savings_account.balance += loan.principal_amount
-                    savings_account.save()
-
-                    # 4. Generate an official transaction receipt in the Ledger
-                    SavingsTransaction.objects.create(
-                        account=savings_account,
-                        transaction_type='DEPOSIT',
-                        amount=loan.principal_amount,
-                        reference=f"DISB-{uuid.uuid4().hex[:6].upper()}",
-                        status='APPROVED',
-                        description=f"Automated Loan Disbursement for {loan.loan_id}",
-                        approved_by=request.user
-                    )
-                    
-                    disbursed_count += 1
-                    
-            except Exception as e:
-                self.message_user(request, f"System Error disbursing {loan.loan_id}: {str(e)}", level=messages.ERROR)
-
-        if disbursed_count > 0:
-            self.message_user(request, f"Successfully disbursed {disbursed_count} loan(s) and credited member savings accounts!", level=messages.SUCCESS)
+class LoanAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
+    list_display = ("reference", "member", "product", "principal", "term_months", "disbursed_on", "maturity_date", "status")
+    list_filter = ("status", "product", "is_migrated")
+    search_fields = ("reference", "member__membership_number", "member__last_name")
+    inlines = [RepaymentInstallmentInline]
 
 
-@admin.register(LoanGuarantor)
-class LoanGuarantorAdmin(admin.ModelAdmin):
-    list_display = ('loan', 'guarantor_member', 'amount_guaranteed', 'status')
-    list_filter = ('status',)
-    search_fields = ('loan__loan_id', 'guarantor_member__membership_id')
+class RepaymentAllocationInline(ReadOnlyAdminMixin, admin.TabularInline):
+    model = RepaymentAllocation
+    extra = 0
+    fields = ("installment", "principal_amount", "interest_amount")
+    readonly_fields = fields
+
 
 @admin.register(LoanRepayment)
-class LoanRepaymentAdmin(admin.ModelAdmin):
-    list_display = ('receipt_reference', 'loan', 'amount_paid', 'payment_date')
-    search_fields = ('receipt_reference', 'loan__loan_id')
-    readonly_fields = ('payment_date',)
+class LoanRepaymentAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
+    list_display = ("transaction", "loan", "principal_component", "interest_component", "penalty_component", "created_at")
+    search_fields = ("transaction__reference", "loan__reference")
+    inlines = [RepaymentAllocationInline]

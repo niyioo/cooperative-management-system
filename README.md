@@ -1,167 +1,147 @@
-# CoopManager Pro 🏢
+# EMDI Cooperative Society — Cooperative Management System
 
-An advanced, full-stack Cooperative Management System designed to handle members, savings, loans, shares, contributions, and general cooperative finances.
+The member and officer portal for the **EMDI Cooperative Society** (Engineering Materials Development Institute, NASENI): membership records, savings (with Christmas Savings kept separate), loans, investments, dividends, account closure, reports and notifications, on one auditable ledger.
 
-## 🌟 Features
+- **Members** see their own savings, loans, investments, dividends and transactions, apply for loans, download statements and request account closure. They cannot withdraw savings through the portal.
+- **Officers** (Chairman, Secretary, Treasurer, Accountant, Loan and Investment Officers, Auditor, Super Administrator) work within role-based permissions, with maker–checker approval on money movements and a full audit trail.
 
-* **Role-Based Access Control (RBAC):** Distinct dashboards and permissions for Super Admins, Managers, Loan Officers, and standard Members.
-* **Member Management & KYC:** Track member profiles, next of kin, and securely upload/verify KYC documents.
-* **Savings & Wallets:** Manage individual member savings accounts, deposits, withdrawals, and dividend payouts.
-* **Loan Processing:** Configurable loan products, application workflows, guarantor approvals, and automated repayment tracking.
-* **Share Capital Management:** Track total cooperative shares, unit prices, and member shareholdings.
-* **Contributions & Fines:** Automate mandatory/voluntary dues, levies, and penalty tracking.
-* **Financial Ledger:** Global cooperative income and expense tracking.
-* **Analytics Dashboard:** Real-time visual metrics using Recharts.
+The design, data model, business rules and API are specified in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**. Deployment is covered in **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**, and the security review in **[docs/SECURITY.md](docs/SECURITY.md)**.
 
-## 📸 System Preview
+## Features
 
-### 🖥️ Admin Dashboard
-The central hub for system administrators to monitor liquidity, active members, and treasury health.
-![Dashboard Overview](./docs/screenshots/dashboard.png)
+| Area | What it does |
+|---|---|
+| Members | Registration (one at a time or spreadsheet import with a dry-run report), profiles, next of kin, documents and photo, status workflow (activate, suspend, reinstate, deactivate), portal invitations |
+| Savings | **Monthly statutory contribution** into Regular Savings (member-chosen amount above a minimum, arrears tracking, monthly payroll/IPPIS deduction schedule that uploads straight back as a batch), regular savings products and **Christmas Savings** cycles (January–October, paid out after closing), single contributions, payroll batch uploads, the month-by-month Christmas grid |
+| Loans | Products with flat or reducing-balance interest, eligibility checks, member applications with documents and **guarantors chosen by membership number** (asked by e-mail and in the portal; they accept or decline under *Guarantees*), review → approval → disbursement, schedules, repayments (single or payroll batch), overdue tracking, default |
+| Investments | Products, member accounts, contributions, liquidations, yearly scheme returns |
+| Dividends | December cycles: calculate (closing, average or minimum balance), recalculate, approve, publish to members, pay to savings or externally |
+| Ledger | One append-only ledger; balances are always derived from it. Maker–checker approvals, reversals, adjustments, batch uploads with validation reports |
+| Account closure | Member request → review → approval (settlement statement frozen) → execution as a settlement batch approved by a second officer. Records are never deleted |
+| Reports | 13 reports (membership, savings, contribution arrears, Christmas grid, loans, repayments, overdue, investments, dividends, transactions, financial summary, member statement, closures) on screen, in Excel and PDF; exports are audited |
+| Notifications | Automatic member notifications (loan decisions, disbursement, closure steps, dividends, payouts), officer messages to members, announcements for members or officers |
+| Administration | Officers and roles (editable permission matrix), cooperative settings, departments, audit log |
 
-### 👥 Member Management
-Track registered members, their status, and detailed financial profiles.
-![Members Page](./docs/screenshots/members_page.png)
+## Tech stack
 
-### 💰 Loans & Credit Portal
-A robust engine for managing loan products, applications, and repayment tracking.
-![Loan Management](./docs/screenshots/loan_management.png)
-![Loan Application](./docs/screenshots/loan_application.png)
+- **Backend:** Python 3.11, Django 5.2, Django REST Framework, Simple JWT, PostgreSQL 16, drf-spectacular (OpenAPI), openpyxl and ReportLab (Excel/PDF), Argon2 password hashing
+- **Frontend:** React 18, Vite, React Router 7, TanStack Query, React Hook Form, Tailwind CSS, Recharts, lucide-react
+- **Tooling:** pytest (+ pytest-django, factory-boy, pytest-cov), Vitest, ESLint, Docker Compose, GitHub Actions
 
-### 🏦 Savings & Contributions
-Manage member wallets, total liquidity pool, and mandatory levies.
-![Savings Management](./docs/screenshots/savings.png)
-![Contributions](./docs/screenshots/contribution.png)
+## Repository layout
 
-### 🧾 Finance Ledger
-A master account history for tracking every income and expense transaction within the system.
-![Finance Ledger](./docs/screenshots/finance_ledger.png)
-
-
-## 🛠️ Tech Stack
-
-**Backend**
-* Python 3.10+
-* Django 5.0 & Django REST Framework
-* PostgreSQL
-* Simple JWT (JSON Web Tokens)
-
-**Frontend**
-* React 18 (Vite)
-* Tailwind CSS
-* React Router v6
-* Axios (with automated interceptors)
-* Lucide React & Recharts
-
-**Database:** PostgreSQL (Hosted on Render)
-**Deployment:** GitHub Pages (Frontend) & Render (Backend)
-**DevOps:** Docker, Docker Compose
-
-## 📋 Prerequisites
-
-Before you begin, ensure you have the following installed:
-* [Node.js](https://nodejs.org/) (v18.0 or higher required for Vite)
-* [Python](https://www.python.org/downloads/) (v3.10 or higher)
-* [PostgreSQL](https://www.postgresql.org/) (running locally or via Docker)
-
----
-
-## 🚀 Local Development Setup
-
-### 1. Database Setup
-Create a new PostgreSQL database. You can do this via pgAdmin or the psql CLI:
-```sql
-CREATE DATABASE cooperative_db;
-CREATE USER coop_user WITH PASSWORD 'Coop@12345';
-GRANT ALL PRIVILEGES ON DATABASE cooperative_db TO coop_user;
+```
+backend/            Django project
+  apps/             one app per module: accounts, members, savings, loans, investments,
+                    dividends, ledger, closures, notifications, reports, audit, configuration, common
+  config/           settings (base, dev, prod, test), URL routing
+  requirements/     base.txt, dev.txt, prod.txt
+  tests/            cross-cutting tests (access-control sweep, operations)
+frontend/           React single-page app (member portal at /member, officer portal at /admin)
+docs/               ARCHITECTURE.md, DEPLOYMENT.md, SECURITY.md
+docker-compose.yml  local PostgreSQL + backend + frontend
+.env.example        every environment variable, documented
 ```
 
-### 2. Backend Setup
-Navigate to the backend directory, set up your virtual environment, and install dependencies.
+## Quick start with Docker
 
 ```bash
-cd backend
-
-# Create and activate virtual environment
-python -m venv venv
-# On Windows: .\venv\Scripts\Activate.ps1
-# On Mac/Linux: source venv/bin/activate
-
-# Install requirements
-pip install -r requirements.txt
+cp .env.example .env
+docker compose up --build
 ```
 
-**Environment Variables**
-Create a `.env` file inside the `backend` folder next to `manage.py`:
-```env
-DEBUG=True
-SECRET_KEY=your-secret-key-here
-ALLOWED_HOSTS=127.0.0.1,localhost
+Then, in another terminal, load the demo data (development only):
 
-DB_NAME=cooperative_db
-DB_USER=coop_user
-DB_PASSWORD=Coop@12345
-DB_HOST=localhost
-DB_PORT=5432
-
-CORS_ALLOWED_ORIGIN=http://localhost:5173
-```
-
-**Migrate & Run**
 ```bash
-# Apply database migrations
-python manage.py migrate
+docker compose exec backend python manage.py seed_demo
+```
 
-# Create your admin account
+Open http://localhost:5173/cooperative-management-system/ and sign in with one of the demo accounts listed below. The API runs at http://localhost:8000/api/v1/, with interactive docs at http://localhost:8000/api/docs/ (development only).
+
+## Local setup without Docker
+
+**Requirements:** Python 3.11+, Node.js 20+, PostgreSQL 14+.
+
+1. Create the database (the user needs `CREATEDB` to run the test suite):
+
+   ```bash
+   createuser --createdb --pwprompt emdi_coop
+   createdb -O emdi_coop emdi_coop
+   ```
+
+2. Backend:
+
+   ```bash
+   cd backend
+   python -m venv venv
+   source venv/bin/activate   # Windows: venv\Scripts\activate
+   pip install -r requirements/dev.txt
+   ```
+
+   Create `backend/.env` from the BACKEND section of `.env.example` (`DJANGO_SETTINGS_MODULE=config.settings.dev`, the `DB_*` values, `CORS_ALLOWED_ORIGINS=http://localhost:5173`), then:
+
+   ```bash
+   python manage.py migrate
+   python manage.py seed_demo      # optional demo data (refuses to run unless DEBUG is on)
+   python manage.py runserver
+   ```
+
+3. Frontend:
+
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+
+   The app reads `VITE_API_BASE_URL` (default `http://localhost:8000/api/v1`). Open http://localhost:5173/cooperative-management-system/.
+
+### Demo accounts
+
+`seed_demo` creates these accounts and prints their shared password when it finishes:
+
+| Sign in as | Role |
+|---|---|
+| admin@demo.emdi.test | Super Administrator |
+| chairman@demo.emdi.test | Cooperative Chairman |
+| secretary@demo.emdi.test | Cooperative Secretary |
+| treasurer@demo.emdi.test | Treasurer |
+| accountant@demo.emdi.test | Accountant |
+| loans@demo.emdi.test | Loan Officer |
+| ada@demo.emdi.test or EMDI/COOP/0001 | Member (Ada Okafor) |
+| bayo@demo.emdi.test or EMDI/COOP/0002 | Member (Bayo Adeyemi) |
+
+Never run `seed_demo` against a database that holds real data.
+
+### First administrator on a fresh database
+
+```bash
 python manage.py createsuperuser
-
-# Start the server
-python manage.py runserver
 ```
-*The backend API will run on `http://127.0.0.1:8000`*
 
-### 3. Frontend Setup
-Open a new terminal window, navigate to the frontend directory, and install dependencies.
+Sign in with that account, then add the other officers under **Settings › Officers**. They receive an e-mail link to set their own passwords.
+
+## Running the tests
 
 ```bash
-cd frontend
-
-# Install Node modules
-npm install
-
-# Start the development server
-npm run dev
+cd backend && pytest                      # 913 tests, including the access-control sweep
+cd backend && pytest --cov=apps           # with coverage (currently 95%)
+cd frontend && npm test                   # Vitest unit tests
+cd frontend && npm run lint               # ESLint, zero warnings allowed
 ```
-*The frontend application will run on `http://localhost:5173`*
 
----
+The backend tests need PostgreSQL (the schema uses PostgreSQL triggers and constraints) and a database user allowed to create the test database. GitHub Actions (`.github/workflows/ci.yml`) runs all of the above plus migration, deploy and API-schema checks and a dependency audit on every push and pull request.
 
-## 🔐 Default API Endpoints
+## Key rules the system enforces
 
-* **Admin Panel:** `http://127.0.0.1:8000/admin/`
-* **Auth (Login):** `/api/v1/auth/login/`
-* **Dashboard Summary:** `/api/v1/reports/dashboard-summary/`
+- Members can view savings but **cannot withdraw** them through the portal.
+- **Every member contributes monthly** into Regular Savings through payroll: an amount they choose, not below the cooperative's minimum. Shortfalls are tracked as arrears.
+- **Christmas Savings** runs January–October and is tracked separately from other savings.
+- **Loans need officer approval**: review, decision and disbursement are separate steps with separate permissions.
+- **Every loan needs a guarantor**: a fellow member, named by membership number, who must accept before the loan can be approved, and who cannot close their own account until that loan is repaid. A member may guarantee at most 2× their savings in total.
+- **Dividends** are processed in December from eligible balances.
+- **Account closure** needs officer approval, and nothing is ever deleted.
+- **Every financial operation is auditable**: posted ledger entries are immutable (corrections are reversals), approvals need a second officer, and every action is in the audit log.
+- **Members see only their own data**, and officers act only within their role's permissions.
 
-## 📁 Project Structure
-
-```text
-cooperative-management-system/
-├── backend/                  # Django API
-│   ├── apps/                 # Modular Django apps (loans, savings, etc.)
-│   ├── config/               # Main Django settings & URLs
-│   ├── manage.py
-│   └── requirements.txt
-├── frontend/                 # React UI
-│   ├── src/
-│   │   ├── api/              # Axios configuration & interceptors
-│   │   ├── components/       # Reusable UI components
-│   │   ├── context/          # React Context (Auth)
-│   │   ├── layouts/          # Page layouts (Sidebar/Navbar)
-│   │   └── pages/            # Route components
-│   ├── index.html
-│   ├── tailwind.config.js
-│   └── package.json
-└── docs/screenshots/         # UI Images
-├── .gitignore
-└── README.md
-```
+The full list (BR-01 to BR-31), with where each rule is enforced, is in [docs/ARCHITECTURE.md §10](docs/ARCHITECTURE.md#10-business-rules).
