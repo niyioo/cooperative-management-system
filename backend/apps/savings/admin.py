@@ -1,19 +1,35 @@
 from django.contrib import admin
-from .models import SavingsAccount, SavingsTransaction
+
+from apps.common.admin import AuditedAdminMixin, NoDeleteAdminMixin, ReadOnlyAdminMixin
+
+from .models import SavingsAccount, SavingsCycle, SavingsProduct, SavingsTransaction
+
+
+@admin.register(SavingsProduct)
+class SavingsProductAdmin(AuditedAdminMixin, NoDeleteAdminMixin, admin.ModelAdmin):
+    list_display = ("name", "code", "kind", "cycle_start_month", "cycle_end_month", "is_mandatory", "is_active")
+    list_filter = ("kind", "is_active")
+    search_fields = ("name", "code")
+
+
+@admin.register(SavingsCycle)
+class SavingsCycleAdmin(AuditedAdminMixin, NoDeleteAdminMixin, admin.ModelAdmin):
+    list_display = ("__str__", "year", "start_date", "end_date", "expected_monthly_contribution", "status")
+    list_filter = ("status", "product", "year")
+    readonly_fields = ("opened_by", "opened_at", "closed_by", "closed_at")
+
 
 @admin.register(SavingsAccount)
-class SavingsAccountAdmin(admin.ModelAdmin):
-    list_display = ('member', 'account_number', 'balance', 'last_updated')
-    search_fields = ('account_number', 'member__first_name', 'member__last_name', 'member__membership_id')
-    readonly_fields = ('balance', 'account_number') # Protect the money and ID!
+class SavingsAccountAdmin(AuditedAdminMixin, NoDeleteAdminMixin, admin.ModelAdmin):
+    list_display = ("account_number", "member", "product", "cycle", "status", "opened_on")
+    list_filter = ("product", "status", "cycle__year")
+    search_fields = ("account_number", "member__membership_number", "member__last_name")
+    autocomplete_fields = ("member",)
+    readonly_fields = ("account_number",)
+
 
 @admin.register(SavingsTransaction)
-class SavingsTransactionAdmin(admin.ModelAdmin):
-    # ✅ Matches your model exactly
-    list_display = ('reference', 'account', 'transaction_type', 'amount', 'status', 'created_at')
-    
-    # ✅ Side-filters
-    list_filter = ('status', 'transaction_type', 'created_at')
-    
-    search_fields = ('reference', 'account__account_number', 'account__member__first_name')
-    readonly_fields = ('reference',)
+class SavingsTransactionAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
+    list_display = ("reference", "member", "savings_account", "txn_type", "entry_side", "amount", "period", "status")
+    list_filter = ("txn_type", "status")
+    search_fields = ("reference", "member__membership_number", "savings_account__account_number")
