@@ -63,7 +63,12 @@ def officer_dashboard(user):
     today = timezone.localdate()
 
     if can(P.VIEW_MEMBER):
-        counts = Member.objects.aggregate(total=Count("id"), active=Count("id", filter=Q(status=MemberStatus.ACTIVE)))
+        counts = Member.objects.filter(membership_type=Member.Type.MEMBER).aggregate(
+            total=Count("id"), active=Count("id", filter=Q(status=MemberStatus.ACTIVE))
+        )
+        counts["christmas_savers"] = Member.objects.filter(
+            membership_type=Member.Type.CHRISTMAS_SAVER, status=MemberStatus.ACTIVE
+        ).count()
         data["members"] = counts
 
     if can(P.VIEW_SAVINGS):

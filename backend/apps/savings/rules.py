@@ -37,7 +37,16 @@ def months_of_membership(member, on_date=None):
     return months_between(member.date_joined, on_date or timezone.localdate())
 
 
+def non_member_problem(product, member):
+    if not member.is_full_member and not product.open_to_non_members:
+        return f"{member.full_name} is a Christmas saver, not a member, and can only save in Christmas Savings."
+    return None
+
+
 def eligibility_problem(product, member, on_date=None):
+    problem = non_member_problem(product, member)
+    if problem:
+        return problem
     if member.status in BLOCKED_MEMBER_STATUSES:
         return f"{member.get_status_display()} members cannot save into {product.name}."
     if product.min_membership_months and months_of_membership(member, on_date) < product.min_membership_months:
@@ -82,6 +91,9 @@ def contribution_problems(account, amount, period, *, ignore_batch=None):
 
     if member.status in BLOCKED_MEMBER_STATUSES:
         problems.append(f"{member.get_status_display()} members cannot receive contributions.")
+    problem = non_member_problem(product, member)
+    if problem:
+        problems.append(problem)
     if not product.is_active:
         problems.append(f"{product.name} is no longer active.")
     if account.status != SavingsAccount.Status.ACTIVE:

@@ -126,6 +126,13 @@ class Column:
 
 COLUMNS = [
     Column("membership_number", "Membership number", identifier(30), help="Leave blank to generate one."),
+    Column(
+        "membership_type",
+        "Membership type",
+        choice([*Member.Type.choices, (Member.Type.CHRISTMAS_SAVER, "Christmas saver"),
+                (Member.Type.CHRISTMAS_SAVER, "Non-member"), (Member.Type.CHRISTMAS_SAVER, "Saver")]),
+        help="Member (default) or Christmas saver: a non-member who saves only in Christmas Savings, numbered separately.",
+    ),
     Column("title", "Title", choice(Member.Title.choices)),
     Column("first_name", "First name", text(100), required=True),
     Column("middle_name", "Middle name", text(100)),
@@ -214,6 +221,7 @@ def _parse_rows(header, data):
             errors["next_of_kin_name"] = ["Give the next of kin's name, relationship and phone together."]
 
         values["status"] = values["status"] or MemberStatus.ACTIVE
+        values["membership_type"] = values["membership_type"] or Member.Type.MEMBER
         values["employment_status"] = values["employment_status"] or Member.EmploymentStatus.ACTIVE
         parsed.append({"row": row_number, "values": values, "errors": errors})
     return parsed, unknown

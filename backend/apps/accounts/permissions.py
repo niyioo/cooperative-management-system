@@ -39,10 +39,15 @@ def is_officer(user):
 
 
 def member_profile(user):
-    """The user's Member, or None. (Reverse one-to-one raises when missing.)"""
+    """
+    The user's Member record when it gives portal access, or None. Christmas
+    savers are not members and have no portal access. (Reverse one-to-one
+    raises when missing.)
+    """
     if not (user and user.is_authenticated):
         return None
-    return getattr(user, "member", None)
+    member = getattr(user, "member", None)
+    return member if member is not None and member.is_full_member else None
 
 
 def can_use_portal(user):

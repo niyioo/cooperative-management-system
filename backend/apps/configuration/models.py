@@ -44,6 +44,11 @@ class CooperativeSettings(models.Model):
         default="EMDI/COOP/{seq:04d}",
         help_text="Python format string; {seq} is the next number, {year} the current year.",
     )
+    saver_number_format = models.CharField(
+        max_length=50,
+        default="EMDI/XMAS/{seq:04d}",
+        help_text="Numbers for Christmas savers who are not members. Python format string with {seq} (and optional {year}).",
+    )
     financial_year_start_month = models.PositiveSmallIntegerField(
         default=1, validators=MONTH_VALIDATORS
     )

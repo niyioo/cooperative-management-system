@@ -58,8 +58,8 @@ class MembersReport(Report):
     filters = ("status", "department", "date_from", "date_to")
     status_choices = MemberStatus.choices
     columns = [
-        *_member_cols(), Column("staff_number", "Staff no."), Column("department", "Department"), Column("phone", "Phone"),
-        Column("email", "Email"), Column("date_joined", "Joined", DATE), Column("status", "Status"),
+        *_member_cols(), Column("membership_type", "Type"), Column("staff_number", "Staff no."), Column("department", "Department"),
+        Column("phone", "Phone"), Column("email", "Email"), Column("date_joined", "Joined", DATE), Column("status", "Status"),
     ]
 
     def rows(self, f):
@@ -72,16 +72,20 @@ class MembersReport(Report):
             qs = qs.filter(date_joined__lte=f["date_to"])
         for m in qs.order_by("membership_number"):
             yield {
-                **_member_vals(m), "staff_number": m.staff_number or "", "department": m.department.name if m.department_id else "",
+                **_member_vals(m), "membership_type": m.get_membership_type_display(), "staff_number": m.staff_number or "",
+                "department": m.department.name if m.department_id else "",
                 "phone": m.phone, "email": "" if is_placeholder_email(m.user.email) else m.user.email,
                 "date_joined": m.date_joined, "status": m.get_status_display(),
             }
 
     def summary(self, rows, f):
         counts = defaultdict(int)
+        savers = 0
         for r in rows:
             counts[r["status"]] += 1
-        return [("Members", len(rows), INT)] + [(status, n, INT) for status, n in sorted(counts.items())]
+            savers += r["membership_type"] != Member.Type.MEMBER.label
+        return ([("Members", len(rows) - savers, INT), ("Christmas savers (non-members)", savers, INT)]
+                + [(status, n, INT) for status, n in sorted(counts.items())])
 
 
 # ---------------------------------------------------------------------------

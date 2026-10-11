@@ -1,4 +1,5 @@
 /** Choice lists mirrored from the backend models, as [value, label] pairs. */
+export const MEMBERSHIP_TYPE = [['MEMBER', 'Member'], ['CHRISTMAS_SAVER', 'Christmas saver (non-member)']];
 export const MEMBER_STATUS = [['PENDING', 'Pending'], ['ACTIVE', 'Active'], ['SUSPENDED', 'Suspended'], ['INACTIVE', 'Inactive'], ['CLOSED', 'Closed']];
 export const TITLES = [['MR', 'Mr'], ['MRS', 'Mrs'], ['MISS', 'Miss'], ['MS', 'Ms'], ['DR', 'Dr'], ['ENGR', 'Engr'], ['PROF', 'Prof']];
 export const GENDERS = [['MALE', 'Male'], ['FEMALE', 'Female']];

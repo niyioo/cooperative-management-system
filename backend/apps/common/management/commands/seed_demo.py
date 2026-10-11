@@ -3,8 +3,9 @@ Load demonstration data for local development and training.
 
     python manage.py seed_demo
 
-Creates officers, members, products, monthly Regular Savings contributions (with
-some arrears), a Christmas Savings cycle with monthly contributions, a running loan, investments and a published dividend for last
+Creates officers, members, two Christmas savers who are not members, products,
+monthly Regular Savings contributions (with some arrears), a Christmas Savings cycle
+with monthly contributions, a running loan, investments and a published dividend for last
 year, all through the normal services so every rule and audit entry applies.
 
 Demo sign-ins (all share DEMO_PASSWORD below; change them if the database is
@@ -114,6 +115,15 @@ class Command(BaseCommand):
             for i, (first, last) in enumerate([("Chidi", "Obi"), ("Zainab", "Bello"), ("Tunde", "Ogun")], start=1)
         ]
         everyone = [ada, bayo, *others]
+        # Christmas savers (BR-33): staff who are not members but save in Christmas Savings through payroll.
+        savers = [
+            create_member_record(
+                admin, status=Member.Status.ACTIVE, membership_type=Member.Type.CHRISTMAS_SAVER, reason="Registered as a Christmas saver",
+                profile={"first_name": first, "last_name": last, "phone": phone, "department": metallurgy, "staff_number": staff,
+                         "date_joined": datetime.date(year, 1, 5), "designation": "Technologist"},
+            )
+            for first, last, phone, staff in [("Grace", "Danjuma", "08034440001", "EMDI/0801"), ("Musa", "Ibrahim", "08034440002", "EMDI/0802")]
+        ]
 
         # Savings: regular opening balances, then Christmas Savings for this year.
         regular = SavingsProduct.objects.get(code="REGULAR")
@@ -127,11 +137,13 @@ class Command(BaseCommand):
         cycle = savings.create_cycle(treasurer, product=christmas, year=year, expected_monthly_contribution=D("5000"))
         savings.open_cycle(treasurer, cycle)
         last_month = min(today.month, 10)
-        for member in everyone:
+        for member in everyone + savers:
             account = SavingsAccount.objects.get(member=member, cycle=cycle)
             for month in range(1, last_month + 1):
                 if member == bayo and month in (4, 5):
                     continue  # Bayo missed two months
+                if member == savers[1] and month < 6:
+                    continue  # Musa started saving in June
                 savings.post_contribution(accountant, account=account, amount=D("5000"), period=datetime.date(year, month, 1),
                                           value_date=min(datetime.date(year, month, 25), today), description=f"Payroll deduction {datetime.date(year, month, 1):%b %Y}")
 

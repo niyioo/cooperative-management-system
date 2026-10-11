@@ -22,6 +22,11 @@ class MemberStatus(models.TextChoices):
     CLOSED = "CLOSED", "Closed"
 
 
+class MembershipType(models.TextChoices):
+    MEMBER = "MEMBER", "Member"
+    CHRISTMAS_SAVER = "CHRISTMAS_SAVER", "Christmas saver (non-member)"
+
+
 class Member(TimeStampedModel):
     """
     A cooperative member: personal, employment and membership information.
@@ -56,6 +61,7 @@ class Member(TimeStampedModel):
         DECEASED = "DECEASED", "Deceased"
 
     Status = MemberStatus
+    Type = MembershipType
 
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="member"
@@ -100,6 +106,12 @@ class Member(TimeStampedModel):
     )
 
     # Membership
+    membership_type = models.CharField(
+        max_length=16,
+        choices=MembershipType.choices,
+        default=MembershipType.MEMBER,
+        help_text="Christmas savers are not members: they save only in products open to non-members and have no portal access.",
+    )
     date_joined = models.DateField(default=timezone.localdate)
     status = models.CharField(max_length=10, choices=MemberStatus.choices, default=MemberStatus.PENDING)
     status_reason = models.CharField(max_length=255, blank=True)
@@ -126,6 +138,7 @@ class Member(TimeStampedModel):
         ]
         indexes = [
             models.Index(fields=["status"], name="members_member_status"),
+            models.Index(fields=["membership_type"], name="members_member_type"),
             models.Index(fields=["last_name", "first_name"], name="members_member_name"),
         ]
         constraints = [
@@ -154,12 +167,19 @@ class Member(TimeStampedModel):
         super().save(*args, **kwargs)
 
     @staticmethod
-    def generate_membership_number():
+    def generate_membership_number(membership_type=MembershipType.MEMBER):
+        """Members and Christmas savers are numbered in separate series (e.g. EMDI/COOP/0001, EMDI/XMAS/0001)."""
         from apps.common.sequences import next_value
         from apps.configuration.models import CooperativeSettings
 
-        fmt = CooperativeSettings.load().membership_number_format
-        return fmt.format(seq=next_value("MEMBERSHIP"), year=timezone.localdate().year)
+        settings_row = CooperativeSettings.load()
+        if membership_type == MembershipType.CHRISTMAS_SAVER:
+            return settings_row.saver_number_format.format(seq=next_value("CHRISTMAS_SAVER"), year=timezone.localdate().year)
+        return settings_row.membership_number_format.format(seq=next_value("MEMBERSHIP"), year=timezone.localdate().year)
+
+    @property
+    def is_full_member(self):
+        return self.membership_type == MembershipType.MEMBER
 
 
 class MembershipStatusChange(TimeStampedModel):

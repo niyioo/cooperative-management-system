@@ -55,6 +55,7 @@ SETTINGS_FIELDS = [
     "phone",
     "currency_code",
     "membership_number_format",
+    "saver_number_format",
     "financial_year_start_month",
     "dividend_processing_month",
     "member_withdrawal_requests_enabled",
@@ -69,18 +70,23 @@ SETTINGS_FIELDS = [
 
 
 def _validate_settings(data):
-    fmt = data.get("membership_number_format")
-    if fmt is not None:
+    for field, example in (("membership_number_format", "EMDI/COOP/{seq:04d}"), ("saver_number_format", "EMDI/XMAS/{seq:04d}")):
+        fmt = data.get(field)
+        if fmt is None:
+            continue
         try:
             sample = fmt.format(seq=1, year=2026)
         except (KeyError, IndexError, ValueError):
             sample = None
         if "{seq" not in fmt or sample is None:
             raise DomainError(
-                "The format must contain {seq}, e.g. EMDI/COOP/{seq:04d}; {year} is optional.",
+                f"The format must contain {{seq}}, e.g. {example}; {{year}} is optional.",
                 code="invalid_format",
-                fields={"membership_number_format": ["Must contain {seq}."]},
+                fields={field: ["Must contain {seq}."]},
             )
+    if data.get("membership_number_format") and data.get("membership_number_format") == data.get("saver_number_format"):
+        raise DomainError("Members and Christmas savers need different number formats.", code="invalid_format",
+                          fields={"saver_number_format": ["Use a different format from members'."]})
 
 
 @transaction.atomic

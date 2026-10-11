@@ -11,7 +11,7 @@ The design, data model, business rules and API are specified in **[docs/ARCHITEC
 
 | Area | What it does |
 |---|---|
-| Members | Registration (one at a time or spreadsheet import with a dry-run report), profiles, next of kin, documents and photo, status workflow (activate, suspend, reinstate, deactivate), portal invitations |
+| Members | Registration of members and of **Christmas savers** (non-members who save only in Christmas Savings, numbered EMDI/XMAS/…, no portal access, can later become members) — one at a time or spreadsheet import with a dry-run report, profiles, next of kin, documents and photo, status workflow (activate, suspend, reinstate, deactivate), portal invitations |
 | Savings | **Monthly statutory contribution** into Regular Savings (member-chosen amount above a minimum, arrears tracking, monthly payroll/IPPIS deduction schedule that uploads straight back as a batch), regular savings products and **Christmas Savings** cycles (January–October, paid out after closing), single contributions, payroll batch uploads, the month-by-month Christmas grid |
 | Loans | Products with flat or reducing-balance interest, eligibility checks, member applications with documents and **guarantors chosen by membership number** (asked by e-mail and in the portal; they accept or decline under *Guarantees*), review → approval → disbursement, schedules, repayments (single or payroll batch), overdue tracking, default |
 | Investments | Products, member accounts, contributions, liquidations, yearly scheme returns |
@@ -124,7 +124,7 @@ Sign in with that account, then add the other officers under **Settings › Offi
 ## Running the tests
 
 ```bash
-cd backend && pytest                      # 919 tests, including the access-control sweep
+cd backend && pytest                      # 937 tests, including the access-control sweep
 cd backend && pytest --cov=apps           # with coverage (currently 95%)
 cd frontend && npm test                   # Vitest unit tests
 cd frontend && npm run lint               # ESLint, zero warnings allowed
@@ -136,7 +136,7 @@ The backend tests need PostgreSQL (the schema uses PostgreSQL triggers and const
 
 - Members can view savings but **cannot withdraw** them through the portal.
 - **Every member contributes monthly** into Regular Savings through payroll: an amount they choose, not below the cooperative's minimum. Shortfalls are tracked as arrears.
-- **Christmas Savings** runs January–October and is tracked separately from other savings.
+- **Christmas Savings** runs January–October and is tracked separately from other savings. **Members and non-members** can save in it; non-members (Christmas savers) can't use the portal or any members-only service.
 - **Loans need officer approval**: review, decision and disbursement are separate steps with separate permissions.
 - **Members can borrow up to 3× their Regular Savings** (built from the monthly contributions), counting everything they already owe.
 - **Every loan needs a guarantor**: a fellow member, named by membership number, who must accept before the loan can be approved, and who cannot close their own account until that loan is repaid. A member may guarantee at most 2× their savings in total.
@@ -145,4 +145,4 @@ The backend tests need PostgreSQL (the schema uses PostgreSQL triggers and const
 - **Every financial operation is auditable**: posted ledger entries are immutable (corrections are reversals), approvals need a second officer, and every action is in the audit log.
 - **Members see only their own data**, and officers act only within their role's permissions.
 
-The full list (BR-01 to BR-32), with where each rule is enforced, is in [docs/ARCHITECTURE.md §10](docs/ARCHITECTURE.md#10-business-rules).
+The full list (BR-01 to BR-33), with where each rule is enforced, is in [docs/ARCHITECTURE.md §10](docs/ARCHITECTURE.md#10-business-rules).

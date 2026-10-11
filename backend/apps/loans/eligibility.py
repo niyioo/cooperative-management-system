@@ -86,6 +86,8 @@ def evaluate(member, product, *, amount=None, term_months=None, exclude_applicat
     max_amount = maximum_amount(product, member, exclude_application=exclude_application)
     checks = [
         _check("product_active", "Loan product is available", product.is_active, "" if product.is_active else "This product is closed to new applications."),
+        _check("full_member", "Applicant is a member of the cooperative", member.is_full_member,
+               "" if member.is_full_member else "Christmas savers are not members and cannot borrow."),
         _check("member_active", "Membership is active", member.status == MemberStatus.ACTIVE, f"Membership status: {member.get_status_display()}."),
     ]
 

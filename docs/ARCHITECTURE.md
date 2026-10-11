@@ -309,7 +309,7 @@ Conventions for every table:
 **CooperativeSettings**: a singleton table, one row, `id=1` enforced by `CHECK`.
 
 - **Identity:** `name` ("EMDI Cooperative Society"), `short_name`, `registration_number`, `address`, `email`, `phone`, `logo`
-- **Formats:** `currency_code` (NGN), `membership_number_format`, `financial_year_start_month` (1)
+- **Formats:** `currency_code` (NGN), `membership_number_format`, `saver_number_format` (EMDI/XMAS/{seq:04d}, for Christmas savers who are not members), `financial_year_start_month` (1)
 - **Dividends:** `dividend_processing_month` (12)
 - **Withdrawals:** `member_withdrawal_requests_enabled` (**False**, global switch that sits above the product-level flags)
 - **Closure:** `closure_disables_portal_login` (True)
@@ -1060,6 +1060,7 @@ The **Enforced by** column says where each rule is guaranteed. A frontend check 
 | BR-30 | A guarantor stays liable until the loans they guarantee are repaid: their account cannot be closed before then, and only guarantors who are active and not closing their account can be chosen, accept, or count at approval. A payroll repayment batch can cover a loan only once per month. | `closures/services._assert_no_running_guarantees`; `loans/selectors.guarantor_problem`; `loans/batches._payroll_months`; tests in `loans/tests/test_loopholes.py` |
 | BR-31 | A member may guarantee loans totalling at most a multiple of their savings (2× by default, `guarantor_savings_multiple`; blank means no limit). Only accepted guarantees on applications in progress and running loans count. | `loans/selectors.guarantee_room`; checked when choosing, at submission and on acceptance; tests in `loans/tests/test_loopholes.py` |
 | BR-32 | Members may borrow up to 3× their Regular Savings, the balance built from the statutory monthly contributions (Christmas Savings and other products don't count). The limit covers total borrowing: what is still owed on running loans, loans awaiting disbursement and approved applications, plus the new loan. A product may set a stricter multiple. | `loans/eligibility.borrowing_limit` / `current_borrowing`, part of the eligibility check at submission and approval (BR-22); setting `loan_savings_multiple`; tests in `loans/tests/test_borrowing_limit.py` |
+| BR-33 | Christmas Savings is open to members and non-members. A non-member is registered as a **Christmas saver**: numbered in a separate series (`saver_number_format`, e.g. EMDI/XMAS/0001), saves only in products marked `open_to_non_members` (Christmas Savings), has no portal access, and is left out of Regular Savings and the monthly contribution, loans and guaranteeing, investments, dividends, broadcasts and membership counts. An officer with `add_member` and `change_member` can make a saver a full member, keeping the record and Christmas history (new member number; membership counts from that day). | `Member.membership_type`; `savings/rules.non_member_problem`; `accounts/permissions.member_profile`; `members/services.convert_to_member`; tests in `members/tests/test_christmas_savers.py` |
 
 ---
 

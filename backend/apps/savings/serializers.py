@@ -27,6 +27,7 @@ class SavingsProductSerializer(serializers.ModelSerializer):
             "payout_month",
             "expected_monthly_contribution",
             "min_contribution",
+            "open_to_non_members",
             "max_monthly_contribution",
             "allow_contribution_outside_window",
             "allow_multiple_contributions_per_period",

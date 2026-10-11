@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Camera, Download, KeyRound, Mail, Pencil, Plus, ShieldCheck, Trash2, UserRound } from 'lucide-react';
+import { ArrowLeft, Camera, Download, KeyRound, Mail, Pencil, Plus, ShieldCheck, Trash2, UserPlus, UserRound } from 'lucide-react';
 import { adminApi } from '../../../api/admin';
 import ActionButton from '../../../components/officer/ActionButton';
 import DataTable from '../../../components/officer/DataTable';
@@ -10,7 +10,7 @@ import FormModal from '../../../components/officer/FormModal';
 import Tabs from '../../../components/officer/Tabs';
 import useList from '../../../components/officer/useList';
 import { Alert, ErrorAlert } from '../../../components/ui/Alert';
-import { StatusBadge } from '../../../components/ui/Badge';
+import { Badge, StatusBadge } from '../../../components/ui/Badge';
 import Button from '../../../components/ui/Button';
 import { Card, CardBody, CardHeader } from '../../../components/ui/Card';
 import EmptyState from '../../../components/ui/EmptyState';
@@ -356,6 +356,7 @@ export default function MemberDetail() {
                   <div className="flex flex-wrap items-center gap-2">
                     <h1 className="text-2xl font-bold text-slate-900">{m.full_name}</h1>
                     <StatusBadge status={m.status} label={m.status_label} />
+                    {m.membership_type === 'CHRISTMAS_SAVER' && <Badge tone="amber">Christmas saver · not a member</Badge>}
                   </div>
                   <p className="text-sm text-slate-500">{m.membership_number}{m.department ? ` · ${m.department.name}` : ''}</p>
                   {can(P.CHANGE_MEMBER) && <PhotoUpload member={m} />}
@@ -368,12 +369,17 @@ export default function MemberDetail() {
                     description={`${text} ${m.full_name}'s membership. The change is recorded in the status history and audit log.`}
                     action={(reason) => adminApi.members.action(m.id, action, { reason })} />
                 ))}
-                {can(P.CHANGE_MEMBER) && m.status !== 'CLOSED' && m.portal.has_email && (
+                {can(P.ADD_MEMBER) && can(P.CHANGE_MEMBER) && m.membership_type === 'CHRISTMAS_SAVER' && m.status !== 'CLOSED' && (
+                  <ActionButton label="Make full member" icon={UserPlus} input="optional" inputLabel="Reason"
+                    description={`Make ${m.full_name} a member of the cooperative. They get a membership number, Regular Savings and the monthly contribution; membership counts from today. Their Christmas Savings stay as they are.`}
+                    action={(reason) => adminApi.members.action(m.id, 'convert-to-member', { reason })} />
+                )}
+                {can(P.CHANGE_MEMBER) && m.membership_type === 'MEMBER' && m.status !== 'CLOSED' && m.portal.has_email && (
                   <ActionButton label="Send activation" variant="secondary" icon={Mail}
                     description={`Email ${m.email} a link to set ${m.portal.activated ? 'a new' : 'their'} password.`}
                     action={() => adminApi.members.action(m.id, 'send-activation')} />
                 )}
-                {can(P.CHANGE_MEMBER) && m.status !== 'CLOSED' && (
+                {can(P.CHANGE_MEMBER) && m.membership_type === 'MEMBER' && m.status !== 'CLOSED' && (
                   <ActionButton label="Temporary password" variant="secondary" icon={KeyRound}
                     description="Generate a one-time password to give the member in person. They must change it at first sign-in. Any existing sessions are signed out."
                     action={() => adminApi.members.action(m.id, 'temporary-password')} onDone={setTempPassword} />

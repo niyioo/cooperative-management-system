@@ -94,6 +94,7 @@ function CooperativeForm({ settings }) {
         <CardHeader title="Business rules" />
         <CardBody className="grid gap-4 sm:grid-cols-2">
           <TextField label="Membership number format" {...register('membership_number_format')} error={err('membership_number_format')} hint="e.g. EMDI/{year}/{seq:04d}" />
+          <TextField label="Christmas saver number format" {...register('saver_number_format')} error={err('saver_number_format')} hint="For non-members, e.g. EMDI/XMAS/{seq:04d}" />
           <TextField label="Currency" {...register('currency_code')} error={err('currency_code')} />
           <SelectField label="Financial year starts" {...register('financial_year_start_month')} error={err('financial_year_start_month')}>{options(MONTHS)}</SelectField>
           <SelectField label="Dividends processed in" {...register('dividend_processing_month')} error={err('dividend_processing_month')}>{options(MONTHS)}</SelectField>

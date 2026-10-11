@@ -10,7 +10,7 @@ import { Card, CardBody, CardHeader } from '../../../components/ui/Card';
 import { CheckboxField, SelectField, TextAreaField, TextField } from '../../../components/ui/Field';
 import PageHeader from '../../../components/ui/PageHeader';
 import QueryState from '../../../components/ui/QueryState';
-import { EMPLOYMENT, GENDERS, MARITAL, TITLES, options } from '../../../lib/choices';
+import { EMPLOYMENT, GENDERS, MARITAL, MEMBERSHIP_TYPE, TITLES, options } from '../../../lib/choices';
 import { applyFieldErrors } from '../../../lib/errors';
 
 // Optional fields the API stores as NULL rather than an empty string.
@@ -21,7 +21,7 @@ const EMPTY = {
   phone: '', alt_phone: '', residential_address: '', state_of_origin: '', lga: '',
   staff_number: '', ippis_number: '', department: '', unit: '', designation: '', grade_level: '', employment_date: '', employment_status: 'ACTIVE',
   date_joined: '', bank_name: '', bank_account_number: '', bank_account_name: '',
-  status: 'ACTIVE', send_activation: true,
+  membership_type: 'MEMBER', status: 'ACTIVE', send_activation: true,
   kin_full_name: '', kin_relationship: '', kin_phone: '', kin_email: '', kin_address: '',
 };
 
@@ -36,13 +36,13 @@ function fromMember(m) {
 }
 
 function toPayload(values, creating) {
-  const { kin_full_name, kin_relationship, kin_phone, kin_email, kin_address, status, send_activation, ...data } = values;
+  const { kin_full_name, kin_relationship, kin_phone, kin_email, kin_address, status, send_activation, membership_type, ...data } = values;
   NULLABLE.forEach((k) => { if (data[k] === '') data[k] = null; });
   if (!data.date_joined) delete data.date_joined;
   if (!data.membership_number) delete data.membership_number;
   if (!data.email) delete data.email;
   if (creating) {
-    Object.assign(data, { status, send_activation: send_activation && !!values.email });
+    Object.assign(data, { membership_type, status, send_activation: membership_type === 'MEMBER' && send_activation && !!values.email });
     if (kin_full_name) {
       data.next_of_kin = { full_name: kin_full_name, relationship: kin_relationship, phone: kin_phone, email: kin_email, address: kin_address };
     }
@@ -85,6 +85,7 @@ function MemberFormBody({ member }) {
   const err = (name) => errors[name]?.message;
   const req = { required: 'This field is required.' };
   const hasEmail = !!watch('email');
+  const isSaver = watch('membership_type') === 'CHRISTMAS_SAVER';
 
   return (
     <form onSubmit={handleSubmit((v) => mutation.mutate(v))} noValidate className="space-y-6">
@@ -126,6 +127,17 @@ function MemberFormBody({ member }) {
       </Section>
 
       <Section title="Membership & bank">
+        {creating && (
+          <div className="sm:col-span-2">
+            <SelectField label="Type" {...register('membership_type')} error={err('membership_type')}>{options(MEMBERSHIP_TYPE)}</SelectField>
+            {isSaver && (
+              <p className="mt-1 text-xs text-slate-500">
+                A Christmas saver is not a member: they save only in Christmas Savings through payroll, are numbered separately
+                (e.g. EMDI/XMAS/0001) and have no portal access. They can be made a full member later.
+              </p>
+            )}
+          </div>
+        )}
         <TextField label="Membership number" {...register('membership_number')} error={err('membership_number')} hint={creating ? 'Leave blank to generate the next number.' : undefined} />
         <TextField label="Date joined" type="date" {...register('date_joined')} error={err('date_joined')} hint={creating ? 'Defaults to today.' : undefined} />
         {creating && (
@@ -151,7 +163,7 @@ function MemberFormBody({ member }) {
         </Section>
       )}
 
-      {creating && (
+      {creating && !isSaver && (
         <CheckboxField label={hasEmail ? 'Email the member a link to set up portal access' : 'Email an activation link (add an email address first)'}
           disabled={!hasEmail} {...register('send_activation')} />
       )}

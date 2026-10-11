@@ -149,6 +149,8 @@ def guarantor_problem(member):
     from apps.closures.models import AccountClosureRequest
     from apps.members.models import MemberStatus
 
+    if not member.is_full_member:
+        return f"{member.full_name} is a Christmas saver, not a member."
     if member.status != MemberStatus.ACTIVE:
         return f"{member.full_name} is not an active member."
     if AccountClosureRequest.objects.filter(member=member, status__in=AccountClosureRequest.OPEN_STATUSES).exists():

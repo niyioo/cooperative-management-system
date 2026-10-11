@@ -21,7 +21,7 @@ from apps.configuration.models import Department
 from apps.savings.models import ProductKind, SavingsAccount, SavingsProduct
 
 from . import importer
-from .models import Member, MemberDocument, MemberImport, MemberStatus, MembershipStatusChange, NextOfKin
+from .models import Member, MemberDocument, MemberImport, MembershipStatusChange, MembershipType, MemberStatus, NextOfKin
 
 User = get_user_model()
 
@@ -113,7 +113,9 @@ def _unique_placeholder_email(membership_number):
 
 
 def open_mandatory_accounts(member):
-    """Open an account in every active mandatory regular savings product (e.g. Regular Savings)."""
+    """Open an account in every active mandatory regular savings product (e.g. Regular Savings). Members only."""
+    if not member.is_full_member:
+        return
     products = SavingsProduct.objects.filter(is_active=True, is_mandatory=True, kind=ProductKind.REGULAR)
     for product in products:
         SavingsAccount.objects.get_or_create(member=member, product=product, cycle=None)
@@ -135,7 +137,7 @@ def _log_status(member, from_status, to_status, reason, actor, closure_request=N
 # ---------------------------------------------------------------------------
 
 def create_member_record(actor, *, profile, email="", membership_number="", status=MemberStatus.PENDING,
-                         next_of_kin=None, reason="Registered"):
+                         next_of_kin=None, reason="Registered", membership_type=MembershipType.MEMBER):
     """
     Create the user account, member profile, status history, next of kin and
     mandatory savings accounts. Callers must check permissions and audit.
@@ -156,7 +158,7 @@ def create_member_record(actor, *, profile, email="", membership_number="", stat
         if user is not None and hasattr(user, "member"):
             _field_error("email", "A member with this email address already exists.", "duplicate_email")
 
-    membership_number = membership_number or Member.generate_membership_number()
+    membership_number = membership_number or Member.generate_membership_number(membership_type)
     if user is None:
         user = User.objects.create_user(
             email=email or _unique_placeholder_email(membership_number),
@@ -165,7 +167,8 @@ def create_member_record(actor, *, profile, email="", membership_number="", stat
             phone=profile.get("phone", ""),
         )
 
-    member = Member(user=user, membership_number=membership_number, status=status, created_by=actor, **profile)
+    member = Member(user=user, membership_number=membership_number, status=status, created_by=actor,
+                    membership_type=membership_type, **profile)
     member.save()
     _log_status(member, "", status, reason, actor)
     if next_of_kin:
@@ -176,7 +179,7 @@ def create_member_record(actor, *, profile, email="", membership_number="", stat
 
 @transaction.atomic
 def register_member(actor, *, profile, email="", membership_number="", status=MemberStatus.PENDING,
-                    next_of_kin=None, send_activation=True):
+                    next_of_kin=None, send_activation=True, membership_type=MembershipType.MEMBER):
     require_perm(actor, P.ADD_MEMBER)
     if status != MemberStatus.PENDING:
         require_perm(actor, P.CHANGE_MEMBER_STATUS)
@@ -187,14 +190,17 @@ def register_member(actor, *, profile, email="", membership_number="", status=Me
         membership_number=membership_number,
         status=status,
         next_of_kin=next_of_kin,
+        membership_type=membership_type,
     )
     user = member.user
-    will_email = send_activation and user.has_real_email and not user.has_usable_password()
+    # Christmas savers have no portal access, so they are never invited.
+    will_email = member.is_full_member and send_activation and user.has_real_email and not user.has_usable_password()
     record(
         "member.created",
         actor=actor,
         obj=member,
-        metadata={"status": status, "activation_email": will_email, "linked_existing_account": user.has_usable_password()},
+        metadata={"status": status, "membership_type": membership_type, "activation_email": will_email,
+                  "linked_existing_account": user.has_usable_password()},
     )
     if will_email:
         transaction.on_commit(lambda: send_activation_email(user))
@@ -409,7 +415,13 @@ def remove_document(actor, document):
 # Portal account
 # ---------------------------------------------------------------------------
 
+def _assert_portal_member(member):
+    if not member.is_full_member:
+        raise DomainError("Christmas savers are not members and have no portal access.", code="no_portal_access")
+
+
 def send_member_activation(actor, member):
+    _assert_portal_member(member)
     if not member.user.has_real_email:
         raise DomainError(
             "This member has no email address. Issue a temporary password instead.", code="no_email"
@@ -419,11 +431,49 @@ def send_member_activation(actor, member):
 
 
 def issue_member_temporary_password(actor, member):
+    _assert_portal_member(member)
     assert_not_self(actor, member, "manage the portal account of")
     if not member.user.is_active:
         raise DomainError("This member's portal account is deactivated.", code="inactive_account")
     return account_services.issue_temporary_password(actor, member.user, permission=P.CHANGE_MEMBER)
 
+
+
+@transaction.atomic
+def convert_to_member(actor, member, *, reason=""):
+    """
+    Make a Christmas saver a full member, keeping the record and its Christmas
+    Savings history. They get a membership number from the members' series,
+    membership counts from today, and the mandatory accounts (Regular Savings)
+    are opened. The portal account can then be activated as for any member.
+    """
+    require_perm(actor, P.ADD_MEMBER)
+    require_perm(actor, P.CHANGE_MEMBER)
+    member = Member.objects.select_for_update().get(pk=member.pk)
+    assert_not_self(actor, member, "convert")
+    if member.is_full_member:
+        raise DomainError(f"{member.full_name} is already a member.", code="already_member")
+    if member.status == MemberStatus.CLOSED:
+        raise DomainError("This record is closed.", code="member_closed")
+    old_number, old_joined = member.membership_number, member.date_joined
+    member.membership_type = MembershipType.MEMBER
+    member.membership_number = Member.generate_membership_number(MembershipType.MEMBER)
+    member.date_joined = timezone.localdate()
+    member.save(update_fields=["membership_type", "membership_number", "date_joined", "updated_at"])
+    open_mandatory_accounts(member)
+    _log_status(member, member.status, member.status, reason or "Became a member (was a Christmas saver)", actor)
+    record(
+        "member.converted_to_member",
+        actor=actor,
+        obj=member,
+        changes={
+            "membership_type": [MembershipType.CHRISTMAS_SAVER, MembershipType.MEMBER],
+            "membership_number": [old_number, member.membership_number],
+            "date_joined": [old_joined, member.date_joined],
+        },
+        metadata={"reason": reason},
+    )
+    return member
 
 
 # ---------------------------------------------------------------------------
@@ -517,6 +567,7 @@ def _commit_import(actor, member_import, send_activation):
             status=values["status"],
             next_of_kin=kin,
             reason=f"Imported ({member_import.reference}, row {row['row']})",
+            membership_type=values.get("membership_type") or MembershipType.MEMBER,
         )
         record("member.created", actor=actor, obj=member, metadata={"import": member_import.reference, "row": row["row"]})
         created.append(member)
@@ -534,7 +585,7 @@ def _commit_import(actor, member_import, send_activation):
         metadata={"created": len(created), "activation_emails": send_activation},
     )
     if send_activation:
-        users = [m.user for m in created if m.user.has_real_email and not m.user.has_usable_password()]
+        users = [m.user for m in created if m.is_full_member and m.user.has_real_email and not m.user.has_usable_password()]
         transaction.on_commit(lambda: [send_activation_email(u) for u in users])
     return member_import, None
 

@@ -8,13 +8,13 @@ import useReference from '../../../components/officer/useReference';
 import { StatusBadge } from '../../../components/ui/Badge';
 import Button from '../../../components/ui/Button';
 import PageHeader from '../../../components/ui/PageHeader';
-import { EMPLOYMENT, MEMBER_STATUS } from '../../../lib/choices';
+import { EMPLOYMENT, MEMBER_STATUS, MEMBERSHIP_TYPE } from '../../../lib/choices';
 import { formatDate } from '../../../lib/format';
 import { P, useCan } from '../../../lib/permissions';
 
 export default function MemberList() {
   const can = useCan();
-  const list = useList(['admin', 'members'], adminApi.members.list, { search: '', status: '', department: '', employment_status: '', joined_from: '', joined_to: '' });
+  const list = useList(['admin', 'members'], adminApi.members.list, { search: '', membership_type: '', status: '', department: '', employment_status: '', joined_from: '', joined_to: '' });
   const departments = useReference('departments');
 
   return (
@@ -37,6 +37,7 @@ export default function MemberList() {
         toolbar={
           <FilterBar>
             <SearchInput value={list.filters.search} onChange={(v) => list.setFilter('search', v)} placeholder="Name, membership/staff/IPPIS number, phone or email" />
+            <FilterSelect label="Type" value={list.filters.membership_type} onChange={(v) => list.setFilter('membership_type', v)} options={MEMBERSHIP_TYPE} />
             <FilterSelect label="Status" value={list.filters.status} onChange={(v) => list.setFilter('status', v)} options={MEMBER_STATUS} />
             <FilterSelect label="Department" value={list.filters.department} onChange={(v) => list.setFilter('department', v)}
               options={(departments.data || []).map((d) => [d.id, d.name])} />
@@ -51,7 +52,10 @@ export default function MemberList() {
             cell: (m) => (
               <Link to={`/admin/members/${m.id}`} className="group block">
                 <span className="font-semibold text-slate-900 group-hover:text-brand-600 group-hover:underline">{m.full_name}</span>
-                <span className="block text-xs text-slate-500">{m.membership_number}{m.staff_number ? ` · Staff ${m.staff_number}` : ''}</span>
+                <span className="block text-xs text-slate-500">
+                  {m.membership_number}{m.staff_number ? ` · Staff ${m.staff_number}` : ''}
+                  {m.membership_type === 'CHRISTMAS_SAVER' && <span className="ml-1 rounded bg-amber-50 px-1.5 py-0.5 font-medium text-amber-800">Christmas saver</span>}
+                </span>
               </Link>
             ),
           },

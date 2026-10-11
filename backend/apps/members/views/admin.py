@@ -42,6 +42,7 @@ UUID_RE = r"[0-9a-fA-F-]{36}"
 
 class MemberFilter(django_filters.FilterSet):
     status = django_filters.MultipleChoiceFilter(choices=Member.Status.choices)
+    membership_type = django_filters.ChoiceFilter(choices=Member.Type.choices)
     department = django_filters.UUIDFilter(field_name="department_id")
     employment_status = django_filters.ChoiceFilter(choices=Member.EmploymentStatus.choices)
     gender = django_filters.ChoiceFilter(choices=Member.Gender.choices)
@@ -50,7 +51,7 @@ class MemberFilter(django_filters.FilterSet):
 
     class Meta:
         model = Member
-        fields = ["status", "department", "employment_status", "gender"]
+        fields = ["status", "membership_type", "department", "employment_status", "gender"]
 
 
 class TransactionFilter(django_filters.FilterSet):
@@ -114,6 +115,7 @@ class MemberViewSet(OfficerAPIMixin, mixins.ListModelMixin, mixins.RetrieveModel
         "next_of_kin_detail": (P.CHANGE_MEMBER,),
         "send_activation": (P.CHANGE_MEMBER,),
         "temporary_password": (P.CHANGE_MEMBER,),
+        "convert_to_member": (P.ADD_MEMBER, P.CHANGE_MEMBER),
     }
 
     def get_queryset(self):
@@ -134,6 +136,7 @@ class MemberViewSet(OfficerAPIMixin, mixins.ListModelMixin, mixins.RetrieveModel
             status=data.pop("status"),
             send_activation=data.pop("send_activation"),
             next_of_kin=data.pop("next_of_kin", None),
+            membership_type=data.pop("membership_type"),
             profile=data,
         )
         return Response(MemberDetailSerializer(member).data, status=status.HTTP_201_CREATED)
@@ -261,6 +264,15 @@ class MemberViewSet(OfficerAPIMixin, mixins.ListModelMixin, mixins.RetrieveModel
         serializer.is_valid(raise_exception=True)
         kin = services.update_next_of_kin(request.user, kin, **serializer.validated_data)
         return Response(NextOfKinSerializer(kin).data)
+
+    @extend_schema(request=StatusActionSerializer, responses={200: MemberDetailSerializer},
+                   summary="Make a Christmas saver a full member (keeps their record and Christmas Savings)")
+    @action(detail=True, methods=["post"], url_path="convert-to-member")
+    def convert_to_member(self, request, pk=None):
+        serializer = StatusActionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        member = services.convert_to_member(request.user, self.get_object(), **serializer.validated_data)
+        return Response(MemberDetailSerializer(member).data)
 
     # -- portal account -----------------------------------------------------
 

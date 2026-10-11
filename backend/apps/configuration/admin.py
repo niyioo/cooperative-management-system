@@ -29,6 +29,7 @@ class CooperativeSettingsAdmin(AuditedAdminMixin, NoDeleteAdminMixin, admin.Mode
                 "fields": (
                     "currency_code",
                     "membership_number_format",
+                    "saver_number_format",
                     "financial_year_start_month",
                     "dividend_processing_month",
                 )

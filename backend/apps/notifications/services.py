@@ -80,15 +80,15 @@ def _clean(value, field, label):
 
 def broadcast_recipients(*, audience, department=None, members=None):
     if audience == Broadcast.Audience.ALL_ACTIVE:
-        return Member.objects.filter(status=MemberStatus.ACTIVE)
+        return Member.objects.filter(status=MemberStatus.ACTIVE, membership_type=Member.Type.MEMBER)
     if audience == Broadcast.Audience.DEPARTMENT:
         if department is None:
             raise DomainError("Choose a department.", code="required", fields={"department": ["Choose a department."]})
-        return Member.objects.filter(status=MemberStatus.ACTIVE, department=department)
+        return Member.objects.filter(status=MemberStatus.ACTIVE, department=department, membership_type=Member.Type.MEMBER)
     if not members:
         raise DomainError("Choose at least one member.", code="required", fields={"members": ["Choose at least one member."]})
     # Selected members may be in any status except closed: officers sometimes need to reach suspended members.
-    return Member.objects.filter(pk__in=[m.pk for m in members]).exclude(status=MemberStatus.CLOSED)
+    return Member.objects.filter(pk__in=[m.pk for m in members], membership_type=Member.Type.MEMBER).exclude(status=MemberStatus.CLOSED)
 
 
 @transaction.atomic

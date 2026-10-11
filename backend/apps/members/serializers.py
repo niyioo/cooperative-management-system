@@ -7,7 +7,7 @@ from apps.accounts.models import is_placeholder_email
 from apps.common.serializers import validate_model_field
 from apps.configuration.models import Department
 
-from .models import Member, MemberDocument, MemberImport, MemberStatus, MembershipStatusChange, NextOfKin
+from .models import Member, MemberDocument, MemberImport, MembershipStatusChange, MembershipType, MemberStatus, NextOfKin
 
 PHONE_RE = re.compile(r"^\+?\d{7,15}$")
 
@@ -63,6 +63,7 @@ class MemberListSerializer(serializers.ModelSerializer):
     email = serializers.SerializerMethodField()
     department = DepartmentSummarySerializer(read_only=True)
     status_label = serializers.CharField(source="get_status_display", read_only=True)
+    membership_type_label = serializers.CharField(source="get_membership_type_display", read_only=True)
     has_photo = serializers.SerializerMethodField()
 
     class Meta:
@@ -70,6 +71,8 @@ class MemberListSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "membership_number",
+            "membership_type",
+            "membership_type_label",
             "title",
             "first_name",
             "last_name",
@@ -228,6 +231,7 @@ class MemberProfileSerializer(serializers.ModelSerializer):
 
 
 class MemberCreateSerializer(MemberProfileSerializer):
+    membership_type = serializers.ChoiceField(choices=MembershipType.choices, default=MembershipType.MEMBER)
     status = serializers.ChoiceField(
         choices=[(MemberStatus.PENDING, "Pending activation"), (MemberStatus.ACTIVE, "Active")],
         default=MemberStatus.PENDING,
@@ -236,7 +240,7 @@ class MemberCreateSerializer(MemberProfileSerializer):
     next_of_kin = NextOfKinInputSerializer(required=False)
 
     class Meta(MemberProfileSerializer.Meta):
-        fields = MemberProfileSerializer.Meta.fields + ["status", "send_activation", "next_of_kin"]
+        fields = MemberProfileSerializer.Meta.fields + ["membership_type", "status", "send_activation", "next_of_kin"]
 
 
 class StatusActionSerializer(serializers.Serializer):

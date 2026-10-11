@@ -44,6 +44,9 @@ class SavingsProduct(TimeStampedModel):
     # Contribution rules
     expected_monthly_contribution = MoneyField(default=0)
     min_contribution = MoneyField(default=0)
+    open_to_non_members = models.BooleanField(
+        default=False, help_text="Christmas savers who are not members may save in this product (Christmas Savings)."
+    )
     max_monthly_contribution = MoneyField(
         null=True,
         blank=True,

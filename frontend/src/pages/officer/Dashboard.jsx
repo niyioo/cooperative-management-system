@@ -116,7 +116,7 @@ export default function Dashboard() {
               </section>
             )}
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {d.members && <StatCard label="Members" value={d.members.total} hint={`${d.members.active} active`} icon={Users} />}
+              {d.members && <StatCard label="Members" value={d.members.total} hint={`${d.members.active} active${d.members.christmas_savers ? ` · ${d.members.christmas_savers} Christmas saver(s)` : ''}`} icon={Users} />}
               {d.savings && (
                 <StatCard label="Total savings" value={formatNaira(d.savings.total)} icon={PiggyBank} tone="green"
                   hint={`Christmas ${d.savings.christmas_year}: ${formatNaira(d.savings.christmas)} · Other: ${formatNaira(d.savings.other)}`} />

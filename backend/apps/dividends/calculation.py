@@ -22,7 +22,7 @@ from django.db.models import Q, Sum
 
 from apps.ledger.models import Transaction
 from apps.ledger.selectors import SIGNED_AMOUNT, ZERO
-from apps.members.models import MemberStatus
+from apps.members.models import MembershipType, MemberStatus
 
 KOBO = Decimal("0.01")
 
@@ -53,6 +53,7 @@ def member_bases(cycle):
         .filter(value_date__lte=cycle.cutoff_date)
         .filter(Q(investment_account__product__in=investment_products) | Q(savings_account__product__in=savings_products))
         .exclude(member__status=MemberStatus.CLOSED)
+        .filter(member__membership_type=MembershipType.MEMBER)  # dividends are for members only
         .values("member", "value_date")
         .annotate(net=Sum(SIGNED_AMOUNT))
         .order_by("member", "value_date")

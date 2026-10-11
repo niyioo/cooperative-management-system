@@ -79,6 +79,8 @@ def record_return(actor, *, product, financial_year, amount_earned, description=
 # ---------------------------------------------------------------------------
 
 def account_problem(member, product):
+    if not member.is_full_member:
+        return f"{member.full_name} is a Christmas saver, not a member, and cannot invest."
     if not product.is_active:
         return f"{product.name} is not open to new investments."
     if member.status in BLOCKED_MEMBER_STATUSES:
