@@ -159,7 +159,7 @@ const PRODUCT_DEFAULTS = {
   name: '', code: '', description: '', kind: 'REGULAR', cycle_start_month: 1, cycle_end_month: 10, payout_month: 12,
   expected_monthly_contribution: '0', min_contribution: '0', max_monthly_contribution: '', allow_contribution_outside_window: false, allow_multiple_contributions_per_period: true,
   min_membership_months: 0, is_mandatory: false, allow_officer_withdrawal: false, allow_member_withdrawal_request: false,
-  counts_toward_loan_eligibility: true, is_active: true, display_order: 0,
+  is_active: true, display_order: 0,
 };
 
 function ProductForm({ product }) {
@@ -202,7 +202,6 @@ function ProductForm({ product }) {
           </div>
           <div className="grid gap-2">
             <CheckboxField label="Mandatory for every member" {...register('is_mandatory')} />
-            <CheckboxField label="Counts toward loan eligibility" {...register('counts_toward_loan_eligibility')} />
             <CheckboxField label="Allow more than one contribution per month" {...register('allow_multiple_contributions_per_period')} />
             {watch('kind') === 'CYCLE' && <CheckboxField label="Accept contributions outside the cycle window" {...register('allow_contribution_outside_window')} />}
             <CheckboxField label="Officers may record withdrawals" {...register('allow_officer_withdrawal')} />
@@ -222,7 +221,6 @@ export function SavingsProducts() {
         { header: 'Product', cell: (p) => <><p className="font-semibold text-slate-900">{p.name}</p><p className="text-xs text-slate-500">{p.code}</p></> },
         { header: 'Kind', cell: (p) => <>{p.kind_label}{p.kind === 'CYCLE' && <p className="text-xs text-slate-500">{label(MONTHS, p.cycle_start_month)} – {label(MONTHS, p.cycle_end_month)}</p>}</> },
         { header: 'Expected monthly', align: 'right', cell: (p) => <Money value={p.expected_monthly_contribution} /> },
-        { header: 'Loan collateral', cell: (p) => (p.counts_toward_loan_eligibility ? 'Yes' : 'No') },
         { header: 'Status', cell: (p) => <StatusBadge status={p.is_active ? 'ACTIVE' : 'INACTIVE'} /> },
         { header: '', align: 'right', cell: (p) => <ProductForm product={p} /> },
       ]} />

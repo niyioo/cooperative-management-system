@@ -7,10 +7,12 @@ from decimal import Decimal
 
 from django.utils import timezone
 
+from apps.configuration.models import CooperativeSettings
 from apps.ledger.selectors import ZERO, net_by
 from apps.members.models import MemberStatus
 from apps.savings.models import SavingsAccount
 from apps.savings.rules import months_of_membership
+from apps.savings.statutory import statutory_account
 
 from .models import Loan, LoanApplication
 
@@ -23,19 +25,49 @@ OPEN_APPLICATION_STATUSES = [
 
 
 def eligible_savings(member):
-    """Savings that count as security: products flagged counts_toward_loan_eligibility, accounts not closed."""
-    accounts = SavingsAccount.objects.filter(
-        member=member, product__counts_toward_loan_eligibility=True
-    ).exclude(status=SavingsAccount.Status.CLOSED)
-    balances = net_by("savings_account", member=member)
-    return sum((balances.get(a.pk, ZERO) for a in accounts), ZERO)
+    """
+    The savings loans are measured against (BR-32): the member's Regular Savings,
+    built from the statutory monthly contributions. Christmas Savings and other
+    products don't count.
+    """
+    account = statutory_account(member)
+    if account is None or account.status == SavingsAccount.Status.CLOSED:
+        return ZERO
+    return net_by("savings_account", savings_account=account).get(account.pk, ZERO)
 
 
-def maximum_amount(product, member):
+def current_borrowing(member, exclude_application=None):
+    """
+    What the member already owes or has been granted: the balance still owed on
+    running loans, loans approved and awaiting disbursement, and approved
+    applications not yet disbursed.
+    """
+    owed = net_by("loan", member=member, loan__status__in=Loan.RUNNING_STATUSES)
+    total = sum((-amount for amount in owed.values()), ZERO)
+    total += sum(Loan.objects.filter(member=member, status=Loan.Status.PENDING_DISBURSEMENT).values_list("principal", flat=True), ZERO)
+    approved = LoanApplication.objects.filter(member=member, status=LoanApplication.Status.APPROVED, loans__isnull=True)
+    if exclude_application is not None:
+        approved = approved.exclude(pk=exclude_application.pk)
+    total += sum((a.approved_amount or a.amount_requested for a in approved), ZERO)
+    return max(total, ZERO)
+
+
+def borrowing_limit(member):
+    """The most the member may owe in total (BR-32), or None when there is no cooperative limit."""
+    multiple = CooperativeSettings.load().loan_savings_multiple
+    if multiple is None:
+        return None
+    return (eligible_savings(member) * multiple).quantize(Decimal("0.01"))
+
+
+def maximum_amount(product, member, exclude_application=None):
     """The most this member could borrow on this product right now."""
     ceiling = product.max_amount
     if product.max_savings_multiple:
         ceiling = min(ceiling, (eligible_savings(member) * product.max_savings_multiple).quantize(Decimal("0.01")))
+    limit = borrowing_limit(member)
+    if limit is not None:
+        ceiling = min(ceiling, limit - current_borrowing(member, exclude_application=exclude_application))
     return max(ceiling, ZERO)
 
 
@@ -51,7 +83,7 @@ def evaluate(member, product, *, amount=None, term_months=None, exclude_applicat
     """
     today = timezone.localdate()
     savings = eligible_savings(member)
-    max_amount = maximum_amount(product, member)
+    max_amount = maximum_amount(product, member, exclude_application=exclude_application)
     checks = [
         _check("product_active", "Loan product is available", product.is_active, "" if product.is_active else "This product is closed to new applications."),
         _check("member_active", "Membership is active", member.status == MemberStatus.ACTIVE, f"Membership status: {member.get_status_display()}."),
@@ -85,12 +117,24 @@ def evaluate(member, product, *, amount=None, term_months=None, exclude_applicat
     checks.append(_check("no_open_application", "No other open application for this product", not has_open,
                          "Another application is already in progress." if has_open else ""))
 
+    limit = borrowing_limit(member)
+    if limit is not None:
+        borrowed = current_borrowing(member, exclude_application=exclude_application)
+        multiple = CooperativeSettings.load().loan_savings_multiple.normalize()
+        checks.append(_check(
+            "borrowing_limit",
+            f"Total borrowing within {multiple}× Regular Savings",
+            amount is None or borrowed + amount <= limit,
+            f"Regular Savings ₦{savings:,.2f}; limit ₦{limit:,.2f}; already owed ₦{borrowed:,.2f}; "
+            f"available ₦{max(limit - borrowed, ZERO):,.2f}.",
+        ))
     if product.max_savings_multiple:
+        product_limit = (savings * product.max_savings_multiple).quantize(Decimal("0.01"))
         checks.append(_check(
             "savings_security",
-            f"Loan within {product.max_savings_multiple.normalize()}× eligible savings",
-            amount is None or amount <= max_amount,
-            f"Eligible savings ₦{savings:,.2f}; maximum loan ₦{max_amount:,.2f}.",
+            f"Loan within {product.max_savings_multiple.normalize()}× Regular Savings for this product",
+            amount is None or amount <= product_limit,
+            f"Regular Savings ₦{savings:,.2f}; this product lends up to ₦{product_limit:,.2f}.",
         ))
 
     if amount is not None:

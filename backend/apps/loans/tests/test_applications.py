@@ -50,7 +50,7 @@ class TestEligibility:
         from apps.loans.eligibility import eligible_savings
         from apps.savings.models import SavingsProduct
 
-        assert SavingsProduct.objects.get(code="CHRISTMAS").counts_toward_loan_eligibility is False
+        assert SavingsProduct.objects.filter(code="CHRISTMAS").exists()
         assert eligible_savings(MemberFactory()) == 0
 
     def test_quote(self, as_user, loan_officer, product):

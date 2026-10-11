@@ -65,7 +65,6 @@ class SavingsProduct(TimeStampedModel):
         help_text="Also requires the global setting. Off for EMDI.",
     )
 
-    counts_toward_loan_eligibility = models.BooleanField(default=True)
     is_active = models.BooleanField(default=True)
     display_order = models.PositiveSmallIntegerField(default=0)
 

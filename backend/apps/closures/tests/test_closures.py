@@ -53,8 +53,10 @@ def approved_request(leaver, secretary, chairman):
 
 
 def give_loan(member, amount="120000"):
+    """A disbursed loan. The borrowing limit (BR-32) is lifted so a loan can exceed the member's funds."""
     coop = CooperativeSettings.load()
     coop.maker_checker_types = []
+    coop.loan_savings_multiple = None
     coop.save()
     product = LoanProduct.objects.create(name="Regular Loan", code="REG", interest_rate=D("10"), min_amount=D("1000"),
                                          max_amount=D("1000000"), min_term_months=1, max_term_months=24)

@@ -162,7 +162,7 @@ class Command(BaseCommand):
         # A running loan for Ada (disbursed in March, repaid monthly since).
         product = LoanProduct.objects.create(
             name="Regular Loan", code="REG", description="General purpose loan repaid through payroll.",
-            interest_rate=D("10"), min_amount=D("20000"), max_amount=D("2000000"), max_savings_multiple=D("2"),
+            interest_rate=D("10"), min_amount=D("20000"), max_amount=D("2000000"),
             min_term_months=3, max_term_months=24, min_membership_months=6,
             required_documents=["Latest payslip"],
         )

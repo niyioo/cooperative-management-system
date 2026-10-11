@@ -315,6 +315,7 @@ Conventions for every table:
 - **Closure:** `closure_disables_portal_login` (True)
 - **Maker–checker:** `maker_checker_types` (array of transaction types that require approval)
 - **Loans:** `loan_overdue_grace_days` (e.g. 7)
+- **Borrowing:** `loan_savings_multiple` (3: what a member still owes plus a new loan may be at most 3× their Regular Savings; blank means no limit)
 - **Guarantees:** `guarantor_savings_multiple` (2: total guarantees may not exceed 2× the member's savings; blank means no limit)
 - **Monthly contribution:** `contributions_tracked_from` (first month arrears are counted from; blank means from each account's opening)
 - **Security:** `session_idle_timeout_minutes`
@@ -367,7 +368,6 @@ Indexes: `(status)`, `(last_name, first_name)`. No trigram index: at EMDI's size
 | is_mandatory | Automatically opened for every new member (e.g. Regular Savings) |
 | allow_officer_withdrawal | Officers may post withdrawals. Default False for EMDI. |
 | allow_member_withdrawal_request | Default **False**. Not exposed in the member UI while false. |
-| counts_toward_loan_eligibility | Used for "loan ≤ N × savings" rules |
 | is_active, display_order | |
 
 **SavingsCycle** (the spec's *ChristmasSavings*): `product` (cycle products only), `year`, `start_date`, `end_date`, `expected_monthly_contribution` (copied from the product, editable before opening), `status` (`UPCOMING`, `OPEN`, `CLOSED`, `PAID_OUT`), `closed_by`, `closed_at`.
@@ -402,7 +402,7 @@ Unique `(product, year)`.
 | interest_method | `FLAT` · `REDUCING_BALANCE` |
 | interest_collection | `AMORTISED` (spread over instalments) · `UPFRONT` (deducted at disbursement) (Q6) |
 | min_amount, max_amount | |
-| max_savings_multiple | e.g. 2.00, so the loan can be at most 2 × eligible savings. Null means no rule. |
+| max_savings_multiple | Optional stricter limit for this product, e.g. 2.00: the loan can be at most 2 × the member's Regular Savings. Null means only the cooperative-wide borrowing limit applies (BR-32). |
 | min_term_months, max_term_months, allowed_terms | `allowed_terms` is an int array, e.g. `{6,12,18,24}`; empty means any term within the range |
 | min_membership_months | |
 | max_active_loans | Per member for this product (e.g. 1) |
@@ -1059,6 +1059,7 @@ The **Enforced by** column says where each rule is guaranteed. A frontend check 
 | BR-29 | Every member makes a statutory monthly contribution into Regular Savings, deducted through payroll: an amount they choose, not below the product minimum (members change it from next month). Shortfalls are tracked as arrears, and a monthly deduction schedule is produced for payroll. | `savings/statutory.py` (history in `MonthlyContributionChange`); deduction schedule in the contributions batch layout; tests in `savings/tests/test_monthly_contribution.py` |
 | BR-30 | A guarantor stays liable until the loans they guarantee are repaid: their account cannot be closed before then, and only guarantors who are active and not closing their account can be chosen, accept, or count at approval. A payroll repayment batch can cover a loan only once per month. | `closures/services._assert_no_running_guarantees`; `loans/selectors.guarantor_problem`; `loans/batches._payroll_months`; tests in `loans/tests/test_loopholes.py` |
 | BR-31 | A member may guarantee loans totalling at most a multiple of their savings (2× by default, `guarantor_savings_multiple`; blank means no limit). Only accepted guarantees on applications in progress and running loans count. | `loans/selectors.guarantee_room`; checked when choosing, at submission and on acceptance; tests in `loans/tests/test_loopholes.py` |
+| BR-32 | Members may borrow up to 3× their Regular Savings, the balance built from the statutory monthly contributions (Christmas Savings and other products don't count). The limit covers total borrowing: what is still owed on running loans, loans awaiting disbursement and approved applications, plus the new loan. A product may set a stricter multiple. | `loans/eligibility.borrowing_limit` / `current_borrowing`, part of the eligibility check at submission and approval (BR-22); setting `loan_savings_multiple`; tests in `loans/tests/test_borrowing_limit.py` |
 
 ---
 

@@ -39,7 +39,6 @@ PRODUCT_FIELDS = [
     "is_mandatory",
     "allow_officer_withdrawal",
     "allow_member_withdrawal_request",
-    "counts_toward_loan_eligibility",
     "is_active",
     "display_order",
 ]

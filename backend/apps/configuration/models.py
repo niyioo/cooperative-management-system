@@ -64,6 +64,18 @@ class CooperativeSettings(models.Model):
         help_text="Transaction types that must be approved by a second officer before posting.",
     )
     loan_overdue_grace_days = models.PositiveSmallIntegerField(default=7)
+    loan_savings_multiple = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        default=Decimal("3.00"),
+        validators=[MinValueValidator(Decimal("0.01"))],
+        help_text=(
+            "A member's total borrowing (what they still owe plus the new loan) may be at most this multiple "
+            "of their Regular Savings, built from the monthly contributions. Blank means no limit."
+        ),
+    )
     guarantor_savings_multiple = models.DecimalField(
         max_digits=5,
         decimal_places=2,

@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from apps.audit.models import AuditLog
 from apps.closures import services as closures
-from apps.configuration.models import Department
+from apps.configuration.models import CooperativeSettings, Department
 from apps.loans import services as loans
 from apps.loans.models import LoanProduct
 from apps.members.models import MemberStatus
@@ -26,6 +26,7 @@ def chairman(db):
 
 class TestWorkflowNotifications:
     def test_loan_decisions_notify_the_member(self, chairman, this_year):
+        CooperativeSettings.objects.update(loan_savings_multiple=None)  # this member has no savings
         member = MemberFactory(date_joined=datetime.date(this_year - 3, 1, 1))
         product = LoanProduct.objects.create(name="Emergency", code="EMG", interest_rate=D("5"), min_amount=D("1000"),
                                              max_amount=D("100000"), min_term_months=1, max_term_months=6)

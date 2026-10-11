@@ -60,6 +60,7 @@ function CooperativeForm({ settings }) {
       financial_year_start_month: Number(data.financial_year_start_month),
       dividend_processing_month: Number(data.dividend_processing_month),
       loan_overdue_grace_days: Number(data.loan_overdue_grace_days),
+      loan_savings_multiple: data.loan_savings_multiple === '' || data.loan_savings_multiple === null ? null : data.loan_savings_multiple,
       guarantor_savings_multiple: data.guarantor_savings_multiple === '' || data.guarantor_savings_multiple === null ? null : data.guarantor_savings_multiple,
       session_idle_timeout_minutes: Number(data.session_idle_timeout_minutes),
       maker_checker_types: [].concat(data.maker_checker_types || []),
@@ -97,7 +98,9 @@ function CooperativeForm({ settings }) {
           <SelectField label="Financial year starts" {...register('financial_year_start_month')} error={err('financial_year_start_month')}>{options(MONTHS)}</SelectField>
           <SelectField label="Dividends processed in" {...register('dividend_processing_month')} error={err('dividend_processing_month')}>{options(MONTHS)}</SelectField>
           <TextField label="Loan overdue grace (days)" type="number" {...register('loan_overdue_grace_days')} error={err('loan_overdue_grace_days')} />
-          <TextField label="Guarantee limit (× savings)" inputMode="decimal" {...register('guarantor_savings_multiple')} error={err('guarantor_savings_multiple')}
+          <TextField label="Borrowing limit (× Regular Savings)" inputMode="decimal" {...register('loan_savings_multiple')} error={err('loan_savings_multiple')}
+            hint="What a member still owes plus a new loan may be at most this multiple of their Regular Savings. Blank means no limit." />
+          <TextField label="Guarantee limit (× Regular Savings)" inputMode="decimal" {...register('guarantor_savings_multiple')} error={err('guarantor_savings_multiple')}
             hint="A member may guarantee loans totalling at most this multiple of their savings. Blank means no limit." />
           <TextField label="Count monthly contribution arrears from" type="month" {...register('contributions_tracked_from')} error={err('contributions_tracked_from')}
             hint="Leave blank to count from when each member's savings account was opened." />
