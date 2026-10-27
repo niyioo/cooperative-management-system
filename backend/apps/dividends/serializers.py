@@ -34,7 +34,8 @@ class DividendCycleSerializer(serializers.ModelSerializer):
         model = DividendCycle
         fields = [
             "id", "reference", "financial_year", "status", "status_label", "basis", "basis_label", "cutoff_date",
-            "rate", "distributable_surplus", "withholding_rate", "payment_method", "credit_savings_product",
+            "rate", "savings_rate", "interest_refund_rate", "interest_refund_pool", "allowances", "round_down_to_naira",
+            "distributable_surplus", "withholding_rate", "payment_method", "credit_savings_product",
             "eligible_investment_products", "eligible_savings_products", "notes", "latest_run",
             "approved_by", "approved_at", "published_at", "paid_at", "created_at",
         ]
@@ -44,9 +45,19 @@ class DividendCycleSerializer(serializers.ModelSerializer):
         return RunSerializer(run).data if run else None
 
 
+class AllowanceSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=60)
+    amount = serializers.DecimalField(min_value=Decimal("0.01"), **MONEY)
+
+
 class DividendCycleWriteSerializer(serializers.Serializer):
     financial_year = serializers.IntegerField(min_value=2000, max_value=2100)
     rate = serializers.DecimalField(**RATE)
+    savings_rate = serializers.DecimalField(required=False, allow_null=True, **RATE)
+    interest_refund_rate = serializers.DecimalField(required=False, allow_null=True, max_value=Decimal("100"), **RATE)
+    interest_refund_pool = serializers.DecimalField(required=False, allow_null=True, min_value=Decimal("0"), **MONEY)
+    allowances = AllowanceSerializer(many=True, required=False)
+    round_down_to_naira = serializers.BooleanField(required=False)
     basis = serializers.ChoiceField(choices=DividendCycle.Basis.choices, required=False)
     cutoff_date = serializers.DateField(required=False)
     eligible_investment_products = serializers.PrimaryKeyRelatedField(queryset=InvestmentProduct.objects.all(), many=True, required=False)

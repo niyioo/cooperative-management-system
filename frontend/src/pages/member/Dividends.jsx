@@ -21,22 +21,43 @@ export default function Dividends() {
             <div className="grid gap-4 sm:grid-cols-3">
               <StatCard label="Latest dividend" icon={Gift} tone="green" value={data.latest ? formatNaira(data.latest.net_amount) : '—'}
                 hint={data.latest ? `${data.latest.financial_year} · ${data.latest.status.toLowerCase()}` : 'Not yet published'} />
-              <StatCard label="Latest rate" value={data.latest ? `${Number(data.latest.rate)}%` : '—'} />
+              <StatCard label={data.latest?.parts?.length ? 'Made up of' : 'Latest rate'}
+                value={data.latest ? (data.latest.parts?.length ? `${data.latest.parts.length} parts` : `${Number(data.latest.rate)}%`) : '—'}
+                hint={data.latest?.parts?.length ? 'See the breakdown below' : undefined} />
               <StatCard label="Total dividends paid" value={formatNaira(data.total_paid)} tone="slate" />
             </div>
+            {data.latest?.parts?.length > 0 && (
+              <Card>
+                <CardHeader title={`How your ${data.latest.financial_year} dividend was worked out`} />
+                <Table caption="Dividend breakdown">
+                  <thead><tr><Th>Part</Th><Th align="right">On</Th><Th align="right">Rate</Th><Th align="right">Amount</Th></tr></thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {data.latest.parts.map((p) => (
+                      <tr key={p.label}>
+                        <Td>{p.label}</Td>
+                        <Td align="right">{p.basis != null ? <Money value={p.basis} /> : '—'}</Td>
+                        <Td align="right">{p.rate != null ? `${Number(p.rate)}%` : 'Flat'}</Td>
+                        <Td align="right"><Money value={p.amount} /></Td>
+                      </tr>
+                    ))}
+                    <tr><Td className="font-semibold">Total</Td><Td /><Td /><Td align="right"><Money value={data.latest.gross_amount} className="font-semibold" /></Td></tr>
+                  </tbody>
+                </Table>
+              </Card>
+            )}
             <Card>
               <CardHeader title="Dividend history" />
               {data.history.length ? (
                 <Table caption="Dividend history">
                   <thead>
-                    <tr><Th>Year</Th><Th align="right">Investment basis</Th><Th align="right">Rate</Th><Th align="right">Gross</Th><Th align="right">Amount</Th><Th>Status</Th><Th>Paid on</Th></tr>
+                    <tr><Th>Year</Th><Th align="right">Balance counted</Th><Th align="right">Rate</Th><Th align="right">Gross</Th><Th align="right">Amount</Th><Th>Status</Th><Th>Paid on</Th></tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {data.history.map((d) => (
                       <tr key={d.cycle_reference}>
                         <Td className="font-semibold">{d.financial_year}</Td>
                         <Td align="right"><Money value={d.basis_amount} /></Td>
-                        <Td align="right">{Number(d.rate)}%</Td>
+                        <Td align="right">{d.parts?.length ? 'In parts' : `${Number(d.rate)}%`}</Td>
                         <Td align="right"><Money value={d.gross_amount} /></Td>
                         <Td align="right"><Money value={d.net_amount} className="font-semibold" /></Td>
                         <Td><StatusBadge status={d.status} /></Td>

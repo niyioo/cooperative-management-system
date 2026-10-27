@@ -9,6 +9,7 @@ whoever ran the calculation) locks one run. Members only see a cycle once it
 is PUBLISHED. Payment is a batch that a second officer approves.
 """
 from datetime import date
+from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
 from django.db.models import Max, Sum
@@ -29,7 +30,7 @@ from apps.ledger.models import TransactionBatch
 from apps.savings.models import ProductKind, SavingsAccount, SavingsProduct
 from apps.notifications import services as notifications
 
-from .calculation import dividend_amounts, member_bases
+from .calculation import has_parts, member_dividends, money
 from .models import DividendCalculationRun, DividendCycle, MemberDividend
 
 CYCLE = DividendCycle.Status
@@ -38,6 +39,11 @@ EDITABLE_FIELDS = [
     "basis",
     "cutoff_date",
     "rate",
+    "savings_rate",
+    "interest_refund_rate",
+    "interest_refund_pool",
+    "allowances",
+    "round_down_to_naira",
     "distributable_surplus",
     "withholding_rate",
     "payment_method",
@@ -59,7 +65,24 @@ def _assert_status(cycle, allowed, action):
         raise DomainError(f"A {cycle.get_status_display().lower()} dividend cycle cannot be {action}.", code="invalid_cycle_status")
 
 
+def clean_allowances(allowances):
+    """[{"name", "amount"}] with names given and amounts positive; amounts kept as strings for JSON."""
+    cleaned = []
+    for item in allowances or []:
+        name = str(item.get("name", "")).strip()
+        try:
+            amount = money(Decimal(str(item.get("amount", ""))))
+        except (InvalidOperation, ValueError):
+            amount = None
+        if not name or amount is None or amount <= 0:
+            _field_error("allowances", "Each allowance needs a name and an amount above zero.", "invalid_allowance")
+        cleaned.append({"name": name, "amount": str(amount)})
+    return cleaned
+
+
 def _validate(data, year):
+    if data.get("interest_refund_rate") and data.get("interest_refund_pool"):
+        _field_error("interest_refund_pool", "Give either an interest refund rate or an amount to share, not both.", "refund_rate_and_pool")
     cutoff = data.get("cutoff_date")
     if cutoff and cutoff.year != year:
         _field_error("cutoff_date", f"The cutoff date must fall in {year}.", "invalid_cutoff")
@@ -81,6 +104,11 @@ def create_cycle(
     *,
     financial_year,
     rate,
+    savings_rate=None,
+    interest_refund_rate=0,
+    interest_refund_pool=None,
+    allowances=None,
+    round_down_to_naira=False,
     basis=DividendCycle.Basis.AVERAGE_MONTHLY_BALANCE,
     cutoff_date=None,
     eligible_investment_products=None,
@@ -100,6 +128,11 @@ def create_cycle(
         "basis": basis,
         "cutoff_date": cutoff_date or date(financial_year, 11, 30),
         "rate": rate,
+        "savings_rate": savings_rate,
+        "interest_refund_rate": interest_refund_rate or 0,
+        "interest_refund_pool": interest_refund_pool,
+        "allowances": clean_allowances(allowances),
+        "round_down_to_naira": round_down_to_naira,
         "distributable_surplus": distributable_surplus,
         "withholding_rate": withholding_rate,
         "payment_method": payment_method,
@@ -129,6 +162,10 @@ def update_cycle(actor, cycle, *, eligible_investment_products=None, eligible_sa
     require_perm(actor, P.MANAGE_DIVIDEND_CYCLES)
     cycle = _lock(cycle)
     _assert_status(cycle, [CYCLE.DRAFT, CYCLE.CALCULATED], "edited")
+    if "allowances" in data:
+        data["allowances"] = clean_allowances(data["allowances"])
+    if data.get("interest_refund_rate") is None and "interest_refund_rate" in data:
+        data["interest_refund_rate"] = 0
     merged = {f: data.get(f, getattr(cycle, f)) for f in EDITABLE_FIELDS}
     _validate(merged, cycle.financial_year)
     changes = {}
@@ -175,7 +212,7 @@ def calculate(actor, cycle):
     require_perm(actor, P.CALCULATE_DIVIDENDS)
     cycle = _lock(cycle)
     _assert_status(cycle, [CYCLE.DRAFT, CYCLE.CALCULATED], "recalculated")
-    bases = member_bases(cycle)
+    bases = member_dividends(cycle)
     if not bases:
         raise DomainError("No member has an eligible balance for this cycle.", code="nothing_to_calculate")
 
@@ -190,6 +227,11 @@ def calculate(actor, cycle):
                 "basis": cycle.basis,
                 "cutoff_date": cycle.cutoff_date.isoformat(),
                 "rate": cycle.rate,
+                "savings_rate": cycle.savings_rate,
+                "interest_refund_rate": cycle.interest_refund_rate,
+                "interest_refund_pool": cycle.interest_refund_pool,
+                "allowances": cycle.allowances,
+                "round_down_to_naira": cycle.round_down_to_naira,
                 "withholding_rate": cycle.withholding_rate,
                 "eligible_investment_products": sorted(cycle.eligible_investment_products.values_list("code", flat=True)),
                 "eligible_savings_products": sorted(cycle.eligible_savings_products.values_list("code", flat=True)),
@@ -198,7 +240,9 @@ def calculate(actor, cycle):
     )
     rows = []
     for member_id, info in bases.items():
-        gross, withholding, net = dividend_amounts(info["basis"], cycle.rate, cycle.withholding_rate)
+        gross = info["gross"]
+        withholding = money(gross * Decimal(cycle.withholding_rate) / 100)
+        net = gross - withholding
         rows.append(
             MemberDividend(
                 run=run,
@@ -209,7 +253,7 @@ def calculate(actor, cycle):
                 gross_amount=gross,
                 withholding_amount=withholding,
                 net_amount=net,
-                calculation_detail=money_to_str({"month_end_balances": info["balances"], "basis": cycle.basis}),
+                calculation_detail=money_to_str(info["detail"]),
             )
         )
     MemberDividend.objects.bulk_create(rows)
@@ -288,7 +332,9 @@ def publish(actor, cycle):
         notifications.notify_member(
             dividend.member, category=notifications.Category.DIVIDEND,
             title=f"Your {cycle.financial_year} dividend",
-            body=f"The {cycle.financial_year} dividend has been declared at {cycle.rate:g}%. Your dividend is {notifications.naira(dividend.net_amount)}.",
+            body=(f"The {cycle.financial_year} dividend has been declared. Your dividend is {notifications.naira(dividend.net_amount)}."
+                  if has_parts(cycle) else
+                  f"The {cycle.financial_year} dividend has been declared at {cycle.rate:g}%. Your dividend is {notifications.naira(dividend.net_amount)}."),
             link=notifications.link("dividends"),
         )
     return cycle

@@ -114,7 +114,7 @@ export function MonthlyContributionPanel({ account }) {
             <CardHeader
               title="Monthly contribution"
               description={`Deducted through payroll · minimum ${formatNaira(data.minimum)} · tracked from ${formatPeriod(data.tracked_from)}`}
-              action={can(P.POST_SAVINGS_CONTRIBUTION) && data.tracked && <ChangeAmountButton account={account} data={data} />}
+              action={can(P.POST_SAVINGS_CONTRIBUTION) && data.tracked && <ChangeAmountButton accountId={account.id} accountNumber={account.account_number} memberName={account.member.full_name} data={data} />}
             />
             <CardBody className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-4">
@@ -160,15 +160,16 @@ function Figure({ label, value, hint, tone = 'text-slate-900' }) {
   );
 }
 
-function ChangeAmountButton({ account, data }) {
+/** Set a member's own monthly amount (at least the minimum; the member can also change it in the portal). */
+export function ChangeAmountButton({ accountId, accountNumber, memberName, data }) {
   return (
-    <FormModal trigger="Change amount" triggerVariant="secondary" triggerSize="sm" title={`Monthly contribution · ${account.account_number}`} submitLabel="Save"
+    <FormModal trigger="Change amount" triggerVariant="secondary" triggerSize="sm" title={`Monthly contribution · ${accountNumber}`} submitLabel="Save"
       defaultValues={{ amount: '', effective_from: currentPeriod(), reason: '' }}
-      onSubmit={(v) => adminApi.savingsAccounts.action(account.id, 'monthly-contribution', v)}
+      onSubmit={(v) => adminApi.savingsAccounts.action(accountId, 'monthly-contribution', v)}
       renderFields={({ register, errors }) => (
         <>
           <p className="text-sm text-slate-600">
-            {account.member.full_name} contributes {formatNaira(data.amount)} a month now. The member is told of the change in the portal and by e-mail.
+            {memberName} contributes {formatNaira(data.amount)} a month now. The member is told of the change in the portal and by e-mail.
           </p>
           <TextField label="New monthly amount (₦)" required inputMode="decimal"
             hint={data.maximum ? `Between ${formatNaira(data.minimum)} and ${formatNaira(data.maximum)}.` : `At least ${formatNaira(data.minimum)}.`}

@@ -43,7 +43,7 @@ export const UPLOAD_BATCH_TYPES = [
 ];
 export const LOAN_TYPES = [['STANDARD', 'Cash loan'], ['EMERGENCY', 'Emergency loan'], ['COMMODITY', 'Commodity loan (goods on credit)']];
 export const BATCH_TYPES = [
-  ...UPLOAD_BATCH_TYPES, ['CYCLE_PAYOUTS', 'Cycle savings payouts'], ['DIVIDEND_PAYMENTS', 'Dividend payments'], ['CLOSURE_SETTLEMENT', 'Account closure settlement'],
+  ...UPLOAD_BATCH_TYPES, ['CYCLE_PAYOUTS', 'Cycle savings payouts'], ['DIVIDEND_PAYMENTS', 'Dividend payments'], ['CLOSURE_SETTLEMENT', 'Account closure settlement'], ['LOAN_RECOVERY', 'Loan recovered from savings'],
 ];
 
 export const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((m, i) => [i + 1, m]);

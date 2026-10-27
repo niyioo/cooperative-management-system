@@ -23,13 +23,31 @@ import { P, useCan } from '../../../lib/permissions';
 
 const STEPS = ['DRAFT', 'CALCULATED', 'APPROVED', 'PUBLISHED', 'PAID'];
 
+// Allowances are typed as "Food 1000, Gift 1000".
+const allowancesText = (items) => (items || []).map((a) => `${a.name} ${Number(a.amount)}`).join(', ');
+function parseAllowances(text) {
+  return (text || '').split(',').map((t) => t.trim()).filter(Boolean).map((t) => {
+    const m = t.match(/^(.*?)[\s:=]+₦?(\d+(?:\.\d+)?)$/);
+    return m ? { name: m[1].trim(), amount: m[2] } : { name: t, amount: '' };
+  });
+}
+
+export const hasParts = (c) => c.savings_rate != null || Number(c.interest_refund_rate) > 0 || c.interest_refund_pool != null || (c.allowances || []).length > 0;
+
+function partAmount(d, kind) {
+  const parts = (d.calculation_detail?.parts || []).filter((p) => p.part === kind);
+  return parts.reduce((sum, p) => sum + Number(p.amount), 0);
+}
+
 function CycleForm({ cycle }) {
   const savings = useReference('savingsProducts');
   const investments = useReference('investmentProducts', { dividend_eligible: true });
   const year = new Date().getFullYear();
   const defaults = cycle
-    ? { ...cycle, eligible_investment_products: cycle.eligible_investment_products.map(String), eligible_savings_products: cycle.eligible_savings_products.map(String), distributable_surplus: cycle.distributable_surplus || '', credit_savings_product: cycle.credit_savings_product || '' }
-    : { financial_year: year, rate: '', basis: 'CLOSING_BALANCE', cutoff_date: `${year}-12-31`, eligible_investment_products: [], eligible_savings_products: [], distributable_surplus: '', withholding_rate: '0', payment_method: 'CREDIT_TO_SAVINGS', credit_savings_product: '', notes: '' };
+    ? { ...cycle, eligible_investment_products: cycle.eligible_investment_products.map(String), eligible_savings_products: cycle.eligible_savings_products.map(String), distributable_surplus: cycle.distributable_surplus || '', credit_savings_product: cycle.credit_savings_product || '',
+      savings_rate: cycle.savings_rate ?? '', interest_refund_rate: Number(cycle.interest_refund_rate) ? cycle.interest_refund_rate : '', interest_refund_pool: cycle.interest_refund_pool ?? '', allowances: allowancesText(cycle.allowances) }
+    : { financial_year: year, rate: '', basis: 'CLOSING_BALANCE', cutoff_date: `${year}-12-31`, eligible_investment_products: [], eligible_savings_products: [], distributable_surplus: '', withholding_rate: '0', payment_method: 'CREDIT_TO_SAVINGS', credit_savings_product: '', notes: '',
+      savings_rate: '', interest_refund_rate: '', interest_refund_pool: '', allowances: '', round_down_to_naira: false };
   const checkboxes = (register, name, items) => (
     <div className="grid gap-1 rounded-lg border border-slate-200 p-3 sm:grid-cols-2">
       {items.map((p) => (
@@ -49,13 +67,16 @@ function CycleForm({ cycle }) {
         eligible_investment_products: [].concat(v.eligible_investment_products || []), eligible_savings_products: [].concat(v.eligible_savings_products || []),
         distributable_surplus: v.distributable_surplus || null, withholding_rate: v.withholding_rate || '0', payment_method: v.payment_method,
         credit_savings_product: v.payment_method === 'CREDIT_TO_SAVINGS' ? v.credit_savings_product || null : null, notes: v.notes,
+        savings_rate: v.savings_rate === '' ? null : v.savings_rate, interest_refund_rate: v.interest_refund_rate || '0',
+        interest_refund_pool: v.interest_refund_pool === '' ? null : v.interest_refund_pool, allowances: parseAllowances(v.allowances),
+        round_down_to_naira: Boolean(v.round_down_to_naira),
       })}
       onSubmit={(data) => (cycle ? adminApi.dividendCycles.update(cycle.id, data) : adminApi.dividendCycles.create(data))}
       renderFields={({ register, errors, watch }) => (
         <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
           <div className="grid gap-4 sm:grid-cols-2">
             <TextField label="Financial year" type="number" required {...register('financial_year', { required: 'Required.' })} error={errors.financial_year?.message} />
-            <TextField label="Dividend rate (%)" required inputMode="decimal" {...register('rate', { required: 'Required.' })} error={errors.rate?.message} />
+            <TextField label="Dividend rate (%)" required inputMode="decimal" {...register('rate', { required: 'Required.' })} error={errors.rate?.message} hint="On the investment products (e.g. share capital), and on savings too unless a savings rate is given" />
             <SelectField label="Calculated on" {...register('basis')} error={errors.basis?.message}>{options(DIVIDEND_BASIS)}</SelectField>
             <TextField label="Cut-off date" type="date" {...register('cutoff_date')} error={errors.cutoff_date?.message} />
             <TextField label="Distributable surplus (₦)" inputMode="decimal" {...register('distributable_surplus')} error={errors.distributable_surplus?.message} hint="Optional cap; calculation fails if the total exceeds it" />
@@ -70,6 +91,18 @@ function CycleForm({ cycle }) {
             <p className="mb-1 text-sm font-medium text-slate-700">Savings products that earn dividends</p>
             {checkboxes(register, 'eligible_savings_products', savings.data || [])}
           </div>
+          <fieldset className="space-y-4 rounded-lg border border-slate-200 p-3">
+            <legend className="px-1 text-sm font-medium text-slate-700">Other parts of the dividend (optional)</legend>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <TextField label="Savings rate (%)" inputMode="decimal" {...register('savings_rate')} error={errors.savings_rate?.message} hint="A separate rate for the savings products above" />
+              <TextField label="Interest refund (%)" inputMode="decimal" {...register('interest_refund_rate')} error={errors.interest_refund_rate?.message} hint="Share of the loan interest each member paid this year" />
+              <TextField label="Or share this amount as interest refund (₦)" inputMode="decimal" {...register('interest_refund_pool')} error={errors.interest_refund_pool?.message} hint="Shared in proportion to interest paid; leave the % empty" />
+              <TextField label="Allowances for every member" {...register('allowances')} error={errors.allowances?.message} hint="e.g. Food 1000, Gift 1000" />
+            </div>
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" {...register('round_down_to_naira')} className="h-4 w-4 rounded border-slate-300 text-brand-600" /> Drop the kobo from each part (whole naira)
+            </label>
+          </fieldset>
           <SelectField label="Payment" {...register('payment_method')} error={errors.payment_method?.message}>{options(DIVIDEND_PAYMENT)}</SelectField>
           {watch('payment_method') === 'CREDIT_TO_SAVINGS' && (
             <SelectField label="Credit to savings product" {...register('credit_savings_product')} error={errors.credit_savings_product?.message}>
@@ -98,7 +131,7 @@ export function DividendCycles() {
         columns={[
           { header: 'Year', cell: (c) => <Link to={`/admin/dividends/${c.id}`} className="font-semibold text-brand-600 hover:underline">{c.financial_year} dividend</Link> },
           { header: 'Reference', cell: (c) => c.reference },
-          { header: 'Rate', align: 'right', cell: (c) => `${Number(c.rate)}%` },
+          { header: 'Rate', align: 'right', cell: (c) => (hasParts(c) ? 'In parts' : `${Number(c.rate)}%`) },
           { header: 'Basis', cell: (c) => c.basis_label },
           { header: 'Net total', align: 'right', cell: (c) => (c.latest_run ? <Money value={c.latest_run.total_net} className="font-semibold" /> : '—') },
           { header: 'Status', cell: (c) => <StatusBadge status={c.status} label={c.status_label} /> },
@@ -128,7 +161,7 @@ export function DividendCycleDetail() {
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2"><h1 className="text-2xl font-bold text-slate-900">{c.financial_year} dividend</h1><StatusBadge status={c.status} label={c.status_label} /></div>
-                  <p className="text-sm text-slate-500">{c.reference} · {Number(c.rate)}% on {c.basis_label.toLowerCase()} at {formatDate(c.cutoff_date)}</p>
+                  <p className="text-sm text-slate-500">{c.reference} · {hasParts(c) ? 'Paid in parts' : `${Number(c.rate)}%`} on {c.basis_label.toLowerCase()} at {formatDate(c.cutoff_date)}</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {['DRAFT', 'CALCULATED'].includes(c.status) && can(P.MANAGE_DIVIDEND_CYCLES) && <CycleForm cycle={c} />}
@@ -178,8 +211,13 @@ export function DividendCycleDetail() {
                     toolbar={<SearchInput value={members.filters.search} onChange={(v) => members.setFilter('search', v)} placeholder="Member name or number" />}
                     columns={[
                       { header: 'Member', cell: (d) => <><p className="font-medium text-slate-900">{d.member.full_name}</p><p className="text-xs text-slate-500">{d.member.membership_number}</p></> },
-                      { header: 'Basis', align: 'right', cell: (d) => <Money value={d.basis_amount} /> },
-                      { header: 'Gross', align: 'right', cell: (d) => <Money value={d.gross_amount} /> },
+                      ...(hasParts(c) ? [
+                        { header: c.savings_rate != null ? 'Shares' : 'Balance', align: 'right', cell: (d) => <Money value={partAmount(d, c.savings_rate != null ? 'shares' : 'balance')} /> },
+                        ...(c.savings_rate != null ? [{ header: 'Savings', align: 'right', cell: (d) => <Money value={partAmount(d, 'savings')} /> }] : []),
+                        ...(Number(c.interest_refund_rate) > 0 || c.interest_refund_pool != null ? [{ header: 'Interest', align: 'right', cell: (d) => <Money value={partAmount(d, 'interest_refund')} /> }] : []),
+                        ...(c.allowances || []).map((a) => ({ header: a.name, align: 'right', cell: (d) => <Money value={(d.calculation_detail?.parts || []).find((p) => p.part === 'allowance' && p.name === a.name)?.amount ?? 0} /> })),
+                      ] : [{ header: 'Basis', align: 'right', cell: (d) => <Money value={d.basis_amount} /> }]),
+                      { header: hasParts(c) ? 'Dividend' : 'Gross', align: 'right', cell: (d) => <Money value={d.gross_amount} /> },
                       { header: 'Tax', align: 'right', cell: (d) => <Money value={d.withholding_amount} /> },
                       { header: 'Net', align: 'right', cell: (d) => <Money value={d.net_amount} className="font-semibold" /> },
                       { header: 'Status', cell: (d) => <StatusBadge status={d.status} label={d.status_label} /> },
@@ -190,6 +228,11 @@ export function DividendCycleDetail() {
                     <CardHeader title="Settings" />
                     <CardBody>
                       <DetailList columns={1} items={[
+                        ['Main rate', `${Number(c.rate)}%`],
+                        ['Savings rate', c.savings_rate != null && `${Number(c.savings_rate)}%`],
+                        ['Interest refund', Number(c.interest_refund_rate) > 0 ? `${Number(c.interest_refund_rate)}% of interest paid` : c.interest_refund_pool != null && `${formatNaira(c.interest_refund_pool)} shared by interest paid`],
+                        ['Allowances', (c.allowances || []).map((a) => `${a.name} ${formatNaira(a.amount)}`).join(', ')],
+                        ['Rounding', c.round_down_to_naira ? 'Whole naira (kobo dropped)' : 'To the kobo'],
                         ['Payment', label(DIVIDEND_PAYMENT, c.payment_method)],
                         ['Withholding tax', `${Number(c.withholding_rate)}%`],
                         ['Distributable surplus', c.distributable_surplus && formatNaira(c.distributable_surplus)],

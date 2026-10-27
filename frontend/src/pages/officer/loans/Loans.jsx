@@ -1,4 +1,4 @@
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Plus } from 'lucide-react';
 import { adminApi } from '../../../api/admin';
@@ -68,6 +68,43 @@ export function OverdueLoans() {
   );
 }
 
+// BR-36: take what the borrower owes from their own savings; a second officer approves the batch.
+function RecoverFromSavings({ loan }) {
+  const navigate = useNavigate();
+  const options = useQuery({ queryKey: ['admin', 'loan', loan.id, 'recover'], queryFn: () => adminApi.loans.sub(loan.id, 'recover') });
+  const o = options.data;
+  if (!o || !o.accounts.length) return null;
+  if (o.pending_batch) {
+    return <Link to="/admin/transactions/batches" className="self-center text-sm font-medium text-amber-700 hover:underline">Recovery {o.pending_batch} awaiting approval</Link>;
+  }
+  const first = o.accounts[0];
+  const suggested = Math.min(Number(o.arrears) || Number(o.outstanding), Number(o.outstanding), Number(first.available));
+  return (
+    <FormModal trigger="Recover from savings" triggerVariant="secondary" title={`Recover from savings · ${loan.reference}`} submitLabel="Prepare recovery"
+      defaultValues={{ savings_account: first.id, amount: suggested > 0 ? suggested.toFixed(2) : '', value_date: today(), reason: Number(o.arrears) > 0 ? `Repayments ${o.days_overdue} days overdue` : '' }}
+      onSubmit={(v) => adminApi.loans.action(loan.id, 'recover', v)}
+      onDone={(batch) => navigate(`/admin/transactions/batches/${batch.id}`)}
+      renderFields={({ register, errors, watch }) => {
+        const account = o.accounts.find((a) => a.id === watch('savings_account'));
+        return (
+          <>
+            <p className="text-sm text-slate-600">
+              {loan.member.full_name} owes {formatNaira(o.outstanding)}{Number(o.arrears) > 0 && <>, of which <strong className="text-red-700">{formatNaira(o.arrears)}</strong> is overdue</>}.
+              The amount is taken from the savings account and paid into this loan. A second officer approves it before anything moves.
+            </p>
+            <SelectField label="Take from" {...register('savings_account')} error={errors.savings_account?.message}>
+              {o.accounts.map((a) => <option key={a.id} value={a.id}>{a.product_name} ({a.account_number}) · {formatNaira(a.available)} available</option>)}
+            </SelectField>
+            <TextField label="Amount (₦)" required inputMode="decimal" {...register('amount', { required: 'Enter an amount.' })} error={errors.amount?.message}
+              hint={account ? `At most ${formatNaira(Math.min(Number(account.available), Number(o.outstanding)))}` : undefined} />
+            <TextField label="Value date" type="date" max={today()} {...register('value_date')} error={errors.value_date?.message} />
+            <TextField label="Reason" required {...register('reason', { required: 'Please give a reason.' })} error={errors.reason?.message} hint="The member is told this reason." />
+          </>
+        );
+      }} />
+  );
+}
+
 export function LoanDetail() {
   const { id } = useParams();
   const can = useCan();
@@ -110,6 +147,7 @@ export function LoanDetail() {
                         </>
                       )} />
                   )}
+                  {running && can(P.RECORD_LOAN_REPAYMENT) && can(P.POST_SAVINGS_WITHDRAWAL) && can(P.MANAGE_BATCHES) && <RecoverFromSavings loan={l} />}
                   {l.status === 'ACTIVE' && can(P.MARK_LOAN_DEFAULT) && (
                     <ActionButton label="Mark as defaulted" variant="danger" input="required" description="Record that this loan is in default. Repayments can still be recorded."
                       action={(reason) => adminApi.loans.action(l.id, 'mark-default', { reason })} />

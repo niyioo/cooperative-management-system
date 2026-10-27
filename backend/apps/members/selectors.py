@@ -20,6 +20,10 @@ def financial_summary(member, viewer):
     summary = {}
     if viewer.has_perm(P.VIEW_SAVINGS):
         summary["savings"] = member_savings_position(member)
+        monthly = _monthly_contribution(member)
+        if monthly:
+            account = statutory.statutory_account(member)
+            summary["monthly_contribution"] = {**monthly, "account_id": str(account.pk), "account_number": account.account_number}
     if viewer.has_perm(P.VIEW_LOANS):
         summary["loans"] = member_loan_position(member)
     if viewer.has_perm(P.VIEW_INVESTMENTS):

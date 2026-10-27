@@ -46,6 +46,20 @@ class DividendCycle(ReferenceMixin, TimeStampedModel):
     basis = models.CharField(max_length=25, choices=Basis.choices, default=Basis.AVERAGE_MONTHLY_BALANCE)
     cutoff_date = models.DateField()
     rate = RateField(help_text="Dividend rate as a percentage.")
+    # Optional parts of the dividend, as EMDI pays it (BR-35). Left empty, a cycle is one rate on one basis.
+    savings_rate = RateField(
+        null=True, blank=True,
+        help_text="Separate rate for the eligible savings products; empty means they share the main rate.",
+    )
+    interest_refund_rate = RateField(default=0, help_text="Share of the loan interest each member paid in the year, given back.")
+    interest_refund_pool = MoneyField(
+        null=True, blank=True,
+        help_text="Instead of a rate: this amount shared in proportion to the loan interest each member paid.",
+    )
+    allowances = models.JSONField(
+        default=list, blank=True, help_text='Flat amounts paid to every member who receives a dividend, e.g. [{"name": "Food", "amount": "1000"}].'
+    )
+    round_down_to_naira = models.BooleanField(default=False, help_text="Drop the kobo from each part of the dividend.")
     distributable_surplus = MoneyField(
         null=True, blank=True, help_text="Optional ceiling: total gross dividends must not exceed it."
     )

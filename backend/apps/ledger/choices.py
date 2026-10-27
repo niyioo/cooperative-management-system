@@ -106,6 +106,7 @@ class BatchType(models.TextChoices):
     DIVIDEND_PAYMENTS = "DIVIDEND_PAYMENTS", "Dividend payments"
     CYCLE_PAYOUTS = "CYCLE_PAYOUTS", "Savings cycle payouts"
     CLOSURE_SETTLEMENT = "CLOSURE_SETTLEMENT", "Account closure settlement"
+    LOAN_RECOVERY = "LOAN_RECOVERY", "Loan recovered from savings"
 
 
 class BatchStatus(models.TextChoices):

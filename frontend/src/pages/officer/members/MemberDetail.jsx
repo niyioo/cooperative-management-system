@@ -22,6 +22,7 @@ import { DOCUMENT_TYPES, EMPLOYMENT, GENDERS, MARITAL, label, options } from '..
 import { saveBlob } from '../../../lib/download';
 import { formatDate, formatDateTime, formatNaira } from '../../../lib/format';
 import { P, useCan } from '../../../lib/permissions';
+import { ChangeAmountButton } from '../savings/MonthlyDeductions';
 
 // Status actions offered for each member status (mirrors members.services.STATUS_TRANSITIONS).
 const STATUS_ACTIONS = {
@@ -147,7 +148,24 @@ function AccountTable({ title, rows, columns }) {
   );
 }
 
-function Finances({ id }) {
+function MonthlyContribution({ m, c }) {
+  const can = useCan();
+  const behind = Number(c.arrears) > 0;
+  return (
+    <Card>
+      <CardHeader title="Monthly contribution" description={`Regular Savings, deducted through payroll · minimum ${formatNaira(c.minimum)}`}
+        action={can(P.POST_SAVINGS_CONTRIBUTION) && c.tracked && <ChangeAmountButton accountId={c.account_id} accountNumber={c.account_number} memberName={m.full_name} data={c} />} />
+      <CardBody className="flex flex-wrap items-baseline gap-x-8 gap-y-2">
+        <p><span className="tabular text-2xl font-bold text-slate-900">{formatNaira(c.amount)}</span> <span className="text-sm text-slate-500">a month</span></p>
+        <p className={`text-sm font-medium ${behind ? 'text-red-700' : 'text-emerald-700'}`}>{behind ? `${formatNaira(c.arrears)} in arrears (about ${c.months_behind} month${c.months_behind === 1 ? '' : 's'})` : 'Up to date'}</p>
+        {c.pending_change && <p className="text-sm text-slate-600">Changes to {formatNaira(c.pending_change.amount)} from {c.pending_change.effective_from}</p>}
+        <Link to={`/admin/savings/accounts/${c.account_id}`} className="text-sm font-medium text-brand-600 hover:underline">Full history</Link>
+      </CardBody>
+    </Card>
+  );
+}
+
+function Finances({ id, m }) {
   const summary = useQuery({ queryKey: ['admin', 'member', id, 'finance'], queryFn: () => adminApi.members.sub(id, 'financial-summary') });
   return (
     <QueryState query={summary}>
@@ -159,6 +177,7 @@ function Finances({ id }) {
             {s.loans && <StatCard label="Loans outstanding" value={formatNaira(s.loans.outstanding)} tone="amber" hint={`${s.loans.active_count} active · ${s.loans.open_applications} open application(s)`} />}
             {s.investments && <StatCard label="Investments" value={formatNaira(s.investments.total_principal)} tone="violet" />}
           </div>
+          {s.monthly_contribution && <MonthlyContribution m={m} c={s.monthly_contribution} />}
           {!s.savings && !s.loans && !s.investments && !s.dividends && (
             <Alert>Your role does not include access to members' balances.</Alert>
           )}
@@ -191,7 +210,7 @@ function Finances({ id }) {
             <AccountTable title="Dividends" rows={s.dividends.history} columns={[
               ['Year', (d) => d.financial_year],
               ['Basis', (d) => <Money value={d.basis_amount} />, 'right'],
-              ['Rate', (d) => `${Number(d.rate)}%`, 'right'],
+              ['Rate', (d) => (d.parts?.length ? 'In parts' : `${Number(d.rate)}%`), 'right'],
               ['Net', (d) => <Money value={d.net_amount} className="font-semibold" />, 'right'],
               ['Status', (d) => <StatusBadge status={d.status} />],
             ]} />
@@ -404,7 +423,7 @@ export default function MemberDetail() {
               { key: 'history', label: 'Status history' },
             ]} />
             {tab === 'overview' && <Overview m={m} />}
-            {tab === 'finance' && <Finances id={m.id} />}
+            {tab === 'finance' && <Finances id={m.id} m={m} />}
             {tab === 'transactions' && <Transactions id={m.id} />}
             {tab === 'documents' && <Documents id={m.id} />}
             {tab === 'kin' && <NextOfKin m={m} />}

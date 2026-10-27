@@ -12,6 +12,8 @@ class LoansConfig(AppConfig):
 
         from . import services  # noqa: F401  (registers ledger posting hooks)
         from .batches import LoanOpeningBalanceBatchHandler, LoanRepaymentBatchHandler
+        from .recovery import LoanRecoveryBatchHandler
 
         register(LoanRepaymentBatchHandler())
         register(LoanOpeningBalanceBatchHandler())
+        register(LoanRecoveryBatchHandler())

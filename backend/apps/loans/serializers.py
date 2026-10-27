@@ -5,6 +5,7 @@ from rest_framework import serializers
 
 from apps.common.serializers import PeriodField, money_to_str
 from apps.members.models import Member
+from apps.savings.models import SavingsAccount
 from apps.savings.serializers import MemberBriefSerializer
 
 from .calculators import schedule_for_product
@@ -259,6 +260,13 @@ class RepaymentInSerializer(serializers.Serializer):
     period = PeriodField(required=False, allow_null=True)
     description = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
     external_reference = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
+
+
+class RecoverySerializer(serializers.Serializer):
+    savings_account = serializers.PrimaryKeyRelatedField(queryset=SavingsAccount.objects.all())
+    amount = serializers.DecimalField(**POSITIVE)
+    reason = serializers.CharField(max_length=500)
+    value_date = serializers.DateField(required=False)
 
 
 class MarkDefaultSerializer(serializers.Serializer):

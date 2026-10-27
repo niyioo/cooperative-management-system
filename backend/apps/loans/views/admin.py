@@ -17,9 +17,9 @@ from apps.accounts.perms import P
 from apps.audit.services import record
 from apps.common.serializers import money_to_str
 from apps.ledger.selectors import with_balance
-from apps.ledger.serializers import TransactionSerializer
+from apps.ledger.serializers import BatchSerializer, TransactionSerializer
 
-from .. import services
+from .. import recovery, services
 from ..eligibility import evaluate
 from ..models import Loan, LoanApplication, LoanApplicationDocument, LoanProduct
 from ..selectors import arrears_from_rows, loan_schedule, next_instalment, overdue_loans
@@ -35,6 +35,7 @@ from ..serializers import (
     LoanSerializer,
     MarkDefaultSerializer,
     QuoteQuerySerializer,
+    RecoverySerializer,
     RejectSerializer,
     RepaymentInSerializer,
     ReturnSerializer,
@@ -225,6 +226,8 @@ class LoanViewSet(OfficerAPIMixin, mixins.ListModelMixin, mixins.RetrieveModelMi
         "repayments:get": (P.VIEW_LOANS,),
         "repayments:post": (P.RECORD_LOAN_REPAYMENT,),
         "mark_default": (P.MARK_LOAN_DEFAULT,),
+        "recover:get": (P.VIEW_LOANS,),
+        "recover:post": (P.RECORD_LOAN_REPAYMENT, P.POST_SAVINGS_WITHDRAWAL, P.MANAGE_BATCHES),
     }
 
     def get_queryset(self):
@@ -267,6 +270,19 @@ class LoanViewSet(OfficerAPIMixin, mixins.ListModelMixin, mixins.RetrieveModelMi
         entries = self.get_object().transactions.select_related("loan").order_by("-value_date", "-created_at")
         page = self.paginate_queryset(entries)
         return self.get_paginated_response(TransactionSerializer(page, many=True).data)
+
+    @extend_schema(methods=["get"], responses={200: OpenApiResponse(description="What is owed and what each savings account could give")})
+    @extend_schema(methods=["post"], request=RecoverySerializer, responses={201: BatchSerializer})
+    @action(detail=True, methods=["get", "post"])
+    def recover(self, request, pk=None):
+        """Take what the borrower owes from their savings (BR-36); a second officer approves the batch."""
+        loan = self.get_object()
+        if request.method == "GET":
+            return Response(recovery.recovery_options(loan))
+        serializer = RecoverySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        batch = recovery.recover_from_savings(request.user, loan, **serializer.validated_data)
+        return Response(BatchSerializer(batch).data, status=status.HTTP_201_CREATED)
 
     @extend_schema(request=MarkDefaultSerializer, responses={200: LoanSerializer})
     @action(detail=True, methods=["post"], url_path="mark-default")

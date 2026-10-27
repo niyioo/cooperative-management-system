@@ -3,6 +3,16 @@ from apps.ledger.selectors import ZERO
 from .models import DividendCalculationRun, DividendCycle, MemberDividend
 
 
+PART_LABELS = {"balance": "On your balances", "shares": "On share capital", "savings": "On savings",
+               "interest_refund": "Refund of loan interest paid"}
+
+
+def _part_label(part):
+    """One line of a dividend paid in parts (BR-35), worded for the member."""
+    return {"label": part.get("name") or PART_LABELS.get(part["part"], part["part"]), "basis": part.get("basis"),
+            "rate": part.get("rate"), "amount": part["amount"]}
+
+
 def member_dividend_history(member, *, published_only):
     """
     Dividends from approved calculation runs. Members only ever see published
@@ -23,6 +33,7 @@ def member_dividend_history(member, *, published_only):
             "net_amount": d.net_amount,
             "status": d.status,
             "paid_at": d.paid_at,
+            "parts": [_part_label(p) for p in d.calculation_detail.get("parts", [])],
         }
         for d in qs.order_by("-cycle__financial_year")
     ]
