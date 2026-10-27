@@ -83,6 +83,17 @@ export function SavingsCycleDetail() {
                 <p className="text-sm text-slate-500">{formatDate(c.start_date)} – {formatDate(c.end_date)} · expected {formatNaira(c.expected_monthly_contribution)} a month</p>
               </div>
               <div className="flex flex-wrap gap-2">
+                {c.status !== 'PAID_OUT' && can(P.MANAGE_SAVINGS_CYCLES) && (
+                  <FormModal trigger="Set bonus" triggerVariant="secondary" title={`Bonus · ${c.name}`} submitLabel="Save bonus"
+                    defaultValues={{ bonus_rate: c.bonus_rate }}
+                    onSubmit={(v) => adminApi.savingsCycles.action(c.id, 'bonus', v)}
+                    renderFields={({ register, errors }) => (
+                      <>
+                        <p className="text-sm text-slate-600">At payout each saver receives their savings plus this percentage of them (e.g. 8.9% on ₦100,000 adds ₦8,900). It can't change once the payout is prepared.</p>
+                        <TextField label="Bonus (%)" inputMode="decimal" {...register('bonus_rate', { required: 'Enter a percentage (0 for none).' })} error={errors.bonus_rate?.message} />
+                      </>
+                    )} />
+                )}
                 {c.status === 'UPCOMING' && can(P.MANAGE_SAVINGS_CYCLES) && (
                   <ActionButton label="Open cycle" description="Members' contributions can be recorded against this cycle once it is open." action={() => adminApi.savingsCycles.action(c.id, 'open')} />
                 )}
@@ -96,9 +107,11 @@ export function SavingsCycleDetail() {
                 )}
               </div>
             </div>
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <StatCard label="Accounts" value={c.account_count} />
               <StatCard label="Total saved" value={formatNaira(c.total_saved)} tone="green" />
+              <StatCard label="Bonus at payout" value={`${Number(c.bonus_rate)}%`} tone="violet"
+                hint={Number(c.bonus_rate) ? `About ${formatNaira(Number(c.total_saved) * Number(c.bonus_rate) / 100)} on today's savings` : 'No bonus set'} />
               <StatCard label="Expected per account" value={formatNaira(Number(c.expected_monthly_contribution) * monthsInclusive(c.start_date, c.end_date))} hint={`${monthsInclusive(c.start_date, c.end_date)} months × expected monthly`} tone="slate" />
             </div>
             <Card>
@@ -112,7 +125,7 @@ export function SavingsCycleDetail() {
                       <tr>
                         <Th className="sticky left-0 z-10">Member</Th>
                         {g.months.map((m) => <Th key={m} align="right">{monthLabel(m)}</Th>)}
-                        <Th align="right">Other</Th><Th align="right">Total</Th><Th align="right">Expected</Th><Th align="right">Paid out</Th>
+                        <Th align="right">Other</Th><Th align="right">Total</Th><Th align="right">Expected</Th><Th align="right">Bonus</Th><Th align="right">Paid out</Th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -128,6 +141,7 @@ export function SavingsCycleDetail() {
                           <Td align="right" className="tabular">{Number(r.other) ? formatAmount(r.other) : '—'}</Td>
                           <Td align="right" className={`tabular font-semibold ${Number(r.total) < Number(r.expected_total) ? 'text-amber-700' : 'text-emerald-700'}`}>{formatAmount(r.total)}</Td>
                           <Td align="right" className="tabular text-slate-500">{formatAmount(r.expected_total)}</Td>
+                          <Td align="right" className="tabular">{Number(r.bonus) ? formatAmount(r.bonus) : '—'}</Td>
                           <Td align="right" className="tabular">{Number(r.paid_out) ? formatAmount(r.paid_out) : '—'}</Td>
                         </tr>
                       ))}
@@ -139,6 +153,7 @@ export function SavingsCycleDetail() {
                         <Td align="right" className="tabular">{formatAmount(g.totals.other)}</Td>
                         <Td align="right" className="tabular">{formatAmount(g.totals.total)}</Td>
                         <Td />
+                        <Td align="right" className="tabular">{formatAmount(g.totals.bonus)}</Td>
                         <Td align="right" className="tabular">{formatAmount(g.totals.paid_out)}</Td>
                       </tr>
                     </tfoot>

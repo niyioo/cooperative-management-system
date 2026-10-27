@@ -22,6 +22,7 @@ class LoanProductSerializer(serializers.ModelSerializer):
             "name",
             "code",
             "description",
+            "loan_type",
             "interest_rate",
             "interest_rate_basis",
             "interest_method",
@@ -130,6 +131,7 @@ class LoanApplicationDetailSerializer(LoanApplicationListSerializer):
     class Meta(LoanApplicationListSerializer.Meta):
         fields = LoanApplicationListSerializer.Meta.fields + [
             "purpose",
+            "items_description",
             "eligibility_snapshot",
             "reviewed_by",
             "reviewed_at",
@@ -161,6 +163,8 @@ class ApplicationOnBehalfSerializer(serializers.Serializer):
     amount_requested = serializers.DecimalField(**POSITIVE)
     term_months = serializers.IntegerField(min_value=1)
     purpose = serializers.CharField(max_length=2000)
+    items_description = serializers.CharField(max_length=2000, required=False, allow_blank=True, default="",
+                                              help_text="Commodity loans: the goods being bought.")
     guarantors = serializers.ListField(
         child=serializers.CharField(max_length=30), allow_empty=False,
         help_text="Guarantors' membership numbers. They are notified, in the portal and by e-mail, to accept or decline.",
@@ -188,6 +192,8 @@ class RejectSerializer(serializers.Serializer):
 class DisburseSerializer(serializers.Serializer):
     disbursed_on = serializers.DateField(required=False)
     external_reference = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
+    supplier = serializers.CharField(max_length=150, required=False, allow_blank=True, default="",
+                                     help_text="Commodity loans: the supplier paid for the goods.")
 
 
 # ---------------------------------------------------------------------------
@@ -197,6 +203,7 @@ class DisburseSerializer(serializers.Serializer):
 class LoanSerializer(serializers.ModelSerializer):
     member = MemberBriefSerializer(read_only=True)
     product_name = serializers.CharField(source="product.name", read_only=True)
+    loan_type = serializers.CharField(source="product.loan_type", read_only=True)
     status_label = serializers.CharField(source="get_status_display", read_only=True)
     outstanding = serializers.SerializerMethodField()
 
@@ -223,6 +230,9 @@ class LoanSerializer(serializers.ModelSerializer):
             "status_label",
             "completed_on",
             "defaulted_on",
+            "loan_type",
+            "supplier",
+            "is_migrated",
         ]
 
     def get_outstanding(self, obj) -> str:

@@ -4,8 +4,10 @@ Investment batch types:
   INVESTMENTS                   monthly payroll investment contributions
   INVESTMENT_OPENING_BALANCES   go-live principal brought forward
 """
+from django.utils import timezone
+
 from apps.accounts.perms import P
-from apps.common.spreadsheets import build_template, cell_text, parse_amount
+from apps.common.spreadsheets import build_template, cell_text, parse_amount, parse_date
 from apps.ledger import services as ledger
 from apps.ledger.batches import BatchHandler
 from apps.ledger.choices import BatchType, TransactionStatus, TransactionType
@@ -31,6 +33,7 @@ class _InvestmentRowsHandler(MemberRowsMixin, BatchHandler):
     columns = {**IDENTIFIER_LABELS, "name": "Name", "product": "Product code", "amount": "Amount", "reference": "Reference"}
     required = {"product": "Product code", "amount": "Amount"}
     txn_type = None
+    dated = False  # opening balances may carry a Balance date
 
     def row_problems(self, account, amount):
         raise NotImplementedError
@@ -59,10 +62,19 @@ class _InvestmentRowsHandler(MemberRowsMixin, BatchHandler):
                 if key in seen and self.one_per_account:
                     row_errors.setdefault("amount", []).append(f"Duplicate of row {seen[key]}.")
                 seen.setdefault(key, row_number)
+            balance_date = None
+            if self.dated:
+                try:
+                    balance_date = parse_date(values.get("balance_date")) or options.get("balance_date")
+                    if balance_date and balance_date > timezone.localdate():
+                        row_errors["balance_date"] = ["Cannot be in the future."]
+                except ValueError as exc:
+                    row_errors["balance_date"] = [str(exc)]
             if row_errors:
                 errors.append({"row": row_number, "errors": row_errors})
             else:
-                lines.append({"member": member, "product": product, "amount": amount, "reference": cell_text(values.get("reference"))[:100]})
+                lines.append({"member": member, "product": product, "amount": amount, "balance_date": balance_date,
+                              "reference": cell_text(values.get("reference"))[:100]})
         return lines, batch_report(len(rows), errors, unknown)
 
     def create_lines(self, actor, batch, lines):
@@ -74,6 +86,7 @@ class _InvestmentRowsHandler(MemberRowsMixin, BatchHandler):
                 txn_type=self.txn_type,
                 amount=line["amount"],
                 account=account,
+                value_date=line.get("balance_date"),
                 description=self.description(line["product"]),
                 external_reference=line["reference"],
                 batch=batch,
@@ -113,6 +126,9 @@ class InvestmentOpeningBalanceBatchHandler(_InvestmentRowsHandler):
     batch_type = BatchType.INVESTMENT_OPENING_BALANCES
     txn_type = TransactionType.INVESTMENT_OPENING_BALANCE
     one_per_account = True
+    dated = True
+    file_options = ("balance_date",)
+    columns = {**_InvestmentRowsHandler.columns, "balance_date": "Balance date"}
 
     def row_problems(self, account, amount, ignore_batch=None):
         problem = account_problem(account.member, account.product)

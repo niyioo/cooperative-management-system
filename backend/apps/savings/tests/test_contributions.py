@@ -149,9 +149,11 @@ class TestMakerChecker:
 
 
 class TestWithdrawals:
-    def test_emdi_products_do_not_allow_withdrawals(self, as_user, treasurer, regular_account):
+    def test_only_regular_savings_allow_officer_withdrawals(self, as_user, treasurer, regular_account, xmas_account):
+        assert regular_account.product.allow_officer_withdrawal  # EMDI's ledgers show officer withdrawals from savings
+        assert not regular_account.product.allow_member_withdrawal_request  # never through the portal (BR-01)
         response = as_user(treasurer).post(
-            WITHDRAWALS, {"account": str(regular_account.pk), "amount": "100", "reason": "Emergency"}, format="json"
+            WITHDRAWALS, {"account": str(xmas_account.pk), "amount": "100", "reason": "Emergency"}, format="json"
         )
         assert code(response) == "withdrawal_not_allowed"
 

@@ -48,14 +48,14 @@ function NewApplicationButton() {
   const products = useReference('loanProducts', { is_active: true });
   return (
     <FormModal trigger="Apply for a member" triggerIcon={Plus} title="Loan application on a member's behalf" submitLabel="Submit application"
-      defaultValues={{ product: '', amount_requested: '', term_months: '', purpose: '', guarantors: '' }}
+      defaultValues={{ product: '', amount_requested: '', term_months: '', purpose: '', items_description: '', guarantors: '' }}
       transform={(v) => ({
         ...v, member: member?.id, term_months: Number(v.term_months),
         guarantors: v.guarantors.split(/[\s,;]+/).map((n) => n.trim()).filter(Boolean),
       })}
       onSubmit={adminApi.loanApplications.create}
       onDone={(app) => { setMember(null); navigate(`/admin/loans/applications/${app.id}`); }}
-      renderFields={({ register, errors }) => (
+      renderFields={({ register, errors, watch }) => (
         <>
           <MemberPicker value={member} onChange={setMember} required error={errors.member?.message} />
           <SelectField label="Loan product" required {...register('product', { required: 'Choose a product.' })} error={errors.product?.message}>
@@ -67,6 +67,10 @@ function NewApplicationButton() {
             <TextField label="Term (months)" required type="number" {...register('term_months', { required: 'Required.' })} error={errors.term_months?.message} />
           </div>
           <TextAreaField label="Purpose" required rows={2} {...register('purpose', { required: 'Required.' })} error={errors.purpose?.message} />
+          {(products.data || []).find((p) => p.id === watch('product'))?.loan_type === 'COMMODITY' && (
+            <TextAreaField label="Goods being bought" required rows={2} {...register('items_description', { required: 'Describe the goods.' })}
+              error={errors.items_description?.message} hint="e.g. deep freezer, make and model" />
+          )}
           <TextField label="Guarantors' membership numbers" required {...register('guarantors', { required: 'At least one guarantor is required.' })}
             error={errors.guarantors?.message} hint="Separate several with commas. Each guarantor is asked by e-mail and in the portal to accept." />
         </>
@@ -181,13 +185,17 @@ export function LoanApplicationDetail() {
                 )}
                 {a.status === 'APPROVED' && can(P.DISBURSE_LOAN) && (
                   <FormModal trigger="Disburse" title={`Disburse ${a.reference}`} submitLabel="Disburse loan"
-                    defaultValues={{ disbursed_on: today(), external_reference: '' }}
+                    defaultValues={{ disbursed_on: today(), external_reference: '', supplier: '' }}
                     onSubmit={(v) => adminApi.loanApplications.action(a.id, 'disburse', v)}
                     onDone={(loan) => navigate(`/admin/loans/${loan.id}`)}
                     renderFields={({ register, errors }) => (
                       <>
                         <Alert>Disbursing {formatNaira(a.approved_amount)} over {a.approved_term_months} months. Depending on settings, a second officer must approve the disbursement entry before the loan becomes active.</Alert>
                         <TextField label="Disbursement date" type="date" max={today()} {...register('disbursed_on')} error={errors.disbursed_on?.message} />
+                        {a.items_description && (
+                          <TextField label="Supplier" required {...register('supplier', { required: 'Name the supplier.' })} error={errors.supplier?.message}
+                            hint={`Commodity loan: the supplier is paid for ${a.items_description}.`} />
+                        )}
                         <TextField label="Payment reference" {...register('external_reference')} error={errors.external_reference?.message} hint="Bank transfer or cheque number" />
                       </>
                     )} />
@@ -207,6 +215,7 @@ export function LoanApplicationDetail() {
                       ['Amount requested', formatNaira(a.amount_requested)], ['Term requested', `${a.term_months} months`], ['Submitted', formatDateTime(a.submitted_at)],
                       a.approved_amount && ['Approved amount', formatNaira(a.approved_amount)], a.approved_term_months && ['Approved term', `${a.approved_term_months} months`],
                       ['Purpose', a.purpose],
+                      a.items_description && ['Goods (commodity loan)', a.items_description],
                     ]} />
                   </CardBody>
                 </Card>

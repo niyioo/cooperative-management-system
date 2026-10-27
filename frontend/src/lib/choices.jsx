@@ -28,7 +28,8 @@ export const DIVIDEND_PAYMENT = [['CREDIT_TO_SAVINGS', 'Credit to a savings acco
 export const TXN_STATUS = [['PENDING', 'Pending'], ['POSTED', 'Posted'], ['REJECTED', 'Rejected'], ['REVERSED', 'Reversed']];
 export const TXN_TYPES = [
   ['SAVINGS_OPENING_BALANCE', 'Savings opening balance'], ['SAVINGS_CONTRIBUTION', 'Savings contribution'], ['SAVINGS_WITHDRAWAL', 'Savings withdrawal'],
-  ['SAVINGS_CYCLE_PAYOUT', 'Cycle savings payout'], ['LOAN_DISBURSEMENT', 'Loan disbursement'], ['LOAN_INTEREST_CHARGE', 'Loan interest charge'],
+  ['SAVINGS_CYCLE_PAYOUT', 'Cycle savings payout'], ['SAVINGS_CYCLE_BONUS', 'Cycle savings bonus'], ['LOAN_DISBURSEMENT', 'Loan disbursement'],
+  ['LOAN_OPENING_BALANCE', 'Loan balance brought forward'], ['LOAN_INTEREST_CHARGE', 'Loan interest charge'],
   ['LOAN_PENALTY', 'Loan penalty'], ['LOAN_REPAYMENT', 'Loan repayment'], ['INVESTMENT_OPENING_BALANCE', 'Investment opening balance'],
   ['INVESTMENT_CONTRIBUTION', 'Investment contribution'], ['INVESTMENT_LIQUIDATION', 'Investment liquidation'], ['DIVIDEND_PAYMENT', 'Dividend payment'],
   ['ADJUSTMENT', 'Adjustment'], ['REVERSAL', 'Reversal'],
@@ -38,7 +39,9 @@ export const BATCH_STATUS = [['DRAFT', 'Draft'], ['VALIDATED', 'Validated'], ['S
 export const UPLOAD_BATCH_TYPES = [
   ['CONTRIBUTIONS', 'Savings contributions'], ['LOAN_REPAYMENTS', 'Loan repayments'], ['INVESTMENTS', 'Investment contributions'],
   ['OPENING_BALANCES', 'Savings opening balances'], ['INVESTMENT_OPENING_BALANCES', 'Investment opening balances'],
+  ['LOAN_OPENING_BALANCES', 'Loan balances brought forward'],
 ];
+export const LOAN_TYPES = [['STANDARD', 'Cash loan'], ['EMERGENCY', 'Emergency loan'], ['COMMODITY', 'Commodity loan (goods on credit)']];
 export const BATCH_TYPES = [
   ...UPLOAD_BATCH_TYPES, ['CYCLE_PAYOUTS', 'Cycle savings payouts'], ['DIVIDEND_PAYMENTS', 'Dividend payments'], ['CLOSURE_SETTLEMENT', 'Account closure settlement'],
 ];

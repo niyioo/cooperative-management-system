@@ -10,7 +10,9 @@ class TransactionType(models.TextChoices):
     SAVINGS_CONTRIBUTION = "SAVINGS_CONTRIBUTION", "Savings contribution"
     SAVINGS_WITHDRAWAL = "SAVINGS_WITHDRAWAL", "Savings withdrawal"
     SAVINGS_CYCLE_PAYOUT = "SAVINGS_CYCLE_PAYOUT", "Savings cycle payout"
+    SAVINGS_CYCLE_BONUS = "SAVINGS_CYCLE_BONUS", "Savings cycle bonus"
     LOAN_DISBURSEMENT = "LOAN_DISBURSEMENT", "Loan disbursement"
+    LOAN_OPENING_BALANCE = "LOAN_OPENING_BALANCE", "Loan balance brought forward"
     LOAN_INTEREST_CHARGE = "LOAN_INTEREST_CHARGE", "Loan interest charge"
     LOAN_PENALTY = "LOAN_PENALTY", "Loan penalty"
     LOAN_REPAYMENT = "LOAN_REPAYMENT", "Loan repayment"
@@ -54,7 +56,9 @@ TYPE_RULES = {
     T.SAVINGS_CONTRIBUTION: (AccountKind.SAVINGS, EntrySide.CREDIT),
     T.SAVINGS_WITHDRAWAL: (AccountKind.SAVINGS, EntrySide.DEBIT),
     T.SAVINGS_CYCLE_PAYOUT: (AccountKind.SAVINGS, EntrySide.DEBIT),
+    T.SAVINGS_CYCLE_BONUS: (AccountKind.SAVINGS, EntrySide.CREDIT),
     T.LOAN_DISBURSEMENT: (AccountKind.LOAN, EntrySide.DEBIT),
+    T.LOAN_OPENING_BALANCE: (AccountKind.LOAN, EntrySide.DEBIT),
     T.LOAN_INTEREST_CHARGE: (AccountKind.LOAN, EntrySide.DEBIT),
     T.LOAN_PENALTY: (AccountKind.LOAN, EntrySide.DEBIT),
     T.LOAN_REPAYMENT: (AccountKind.LOAN, EntrySide.CREDIT),
@@ -83,6 +87,7 @@ DEFAULT_MAKER_CHECKER_TYPES = [
     T.REVERSAL,
     T.SAVINGS_OPENING_BALANCE,
     T.INVESTMENT_OPENING_BALANCE,
+    T.LOAN_OPENING_BALANCE,
     T.SAVINGS_WITHDRAWAL,
     T.SAVINGS_CYCLE_PAYOUT,
     T.INVESTMENT_LIQUIDATION,
@@ -97,6 +102,7 @@ class BatchType(models.TextChoices):
     OPENING_BALANCES = "OPENING_BALANCES", "Savings opening balances"
     INVESTMENTS = "INVESTMENTS", "Investment contributions"
     INVESTMENT_OPENING_BALANCES = "INVESTMENT_OPENING_BALANCES", "Investment opening balances"
+    LOAN_OPENING_BALANCES = "LOAN_OPENING_BALANCES", "Loan balances brought forward"
     DIVIDEND_PAYMENTS = "DIVIDEND_PAYMENTS", "Dividend payments"
     CYCLE_PAYOUTS = "CYCLE_PAYOUTS", "Savings cycle payouts"
     CLOSURE_SETTLEMENT = "CLOSURE_SETTLEMENT", "Account closure settlement"

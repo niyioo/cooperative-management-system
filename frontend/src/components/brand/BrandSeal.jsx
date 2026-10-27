@@ -3,8 +3,8 @@ import emblem from '@/assets/emdi-emblem.svg';
 import { BRAND } from './brand';
 
 /**
- * Circular EMDI Cooperative Society seal: the EMDI emblem in the centre with
- * "EMDI COOPERATIVE" curving over the top and "SOCIETY" along the bottom.
+ * Circular EMDI Cooperative Multipurpose Society seal: the EMDI emblem in the centre with
+ * "EMDI COOPERATIVE" curving over the top and "MULTIPURPOSE SOCIETY" along the bottom.
  * Pure SVG, so it stays sharp at any size and prints cleanly.
  */
 export default function BrandSeal({ size = 96, className = '', title = BRAND.name }) {
@@ -50,12 +50,12 @@ export default function BrandSeal({ size = 96, className = '', title = BRAND.nam
             <text
                 fill={BRAND.colors.white}
                 fontFamily="inherit"
-                fontSize="17"
+                fontSize="12.5"
                 fontWeight="800"
-                letterSpacing="4"
+                letterSpacing="1.6"
             >
                 <textPath href={`#${bottomArc}`} startOffset="50%" textAnchor="middle">
-                    SOCIETY
+                    MULTIPURPOSE SOCIETY
                 </textPath>
             </text>
 

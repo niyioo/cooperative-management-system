@@ -121,6 +121,9 @@ class BatchUploadSerializer(serializers.Serializer):
     file = serializers.FileField()
     product = serializers.CharField(required=False, allow_blank=True, default="", help_text="Default savings product code, e.g. CHRISTMAS.")
     period = serializers.CharField(required=False, allow_blank=True, default="", help_text='Default month, e.g. "2026-03".')
+    balance_date = serializers.DateField(
+        required=False, allow_null=True, default=None, help_text="Opening balances: default date of the balances brought forward."
+    )
     description = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
 
     def __init__(self, *args, **kwargs):

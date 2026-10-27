@@ -26,6 +26,7 @@ from ..models import SavingsAccount, SavingsCycle, SavingsProduct
 from ..selectors import cycle_grid
 from ..serializers import (
     ContributionSerializer,
+    CycleBonusSerializer,
     DeductionScheduleQuerySerializer,
     MonthlyContributionSerializer,
     PayoutSerializer,
@@ -94,6 +95,7 @@ class SavingsCycleViewSet(
         "open": (P.MANAGE_SAVINGS_CYCLES,),
         "close": (P.CLOSE_SAVINGS_CYCLE,),
         "payout": (P.MANAGE_BATCHES, P.POST_SAVINGS_WITHDRAWAL),
+        "bonus": (P.MANAGE_SAVINGS_CYCLES,),
     }
 
     def get_queryset(self):
@@ -139,6 +141,14 @@ class SavingsCycleViewSet(
     @action(detail=True, methods=["post"])
     def close(self, request, pk=None):
         return Response(self._read(services.close_cycle(request.user, self.get_object())))
+
+    @extend_schema(request=CycleBonusSerializer, responses={200: SavingsCycleSerializer})
+    @action(detail=True, methods=["post"])
+    def bonus(self, request, pk=None):
+        """Set the bonus percentage paid on each balance at payout."""
+        serializer = CycleBonusSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response(self._read(services.set_cycle_bonus(request.user, self.get_object(), **serializer.validated_data)))
 
     @extend_schema(request=PayoutSerializer, responses={201: BatchSerializer})
     @action(detail=True, methods=["post"])

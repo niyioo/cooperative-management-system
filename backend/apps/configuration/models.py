@@ -23,7 +23,7 @@ class CooperativeSettings(models.Model):
     id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
 
     # Identity
-    name = models.CharField(max_length=200, default="EMDI Cooperative Society")
+    name = models.CharField(max_length=200, default="EMDI Cooperative Multipurpose Society Ltd")
     short_name = models.CharField(max_length=50, default="EMDI Coop")
     parent_institution = models.CharField(
         max_length=255,

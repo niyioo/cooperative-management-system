@@ -41,7 +41,7 @@ CANCELLABLE = [APP.DRAFT, APP.SUBMITTED, APP.UNDER_REVIEW, APP.RETURNED, APP.APP
 class MyLoanProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = LoanProduct
-        fields = ["id", "name", "code", "description", "interest_rate", "interest_rate_basis", "interest_method",
+        fields = ["id", "name", "code", "description", "loan_type", "interest_rate", "interest_rate_basis", "interest_method",
                   "interest_collection", "min_amount", "max_amount", "min_term_months", "max_term_months",
                   "allowed_terms", "guarantors_required", "required_documents"]
 
@@ -105,7 +105,7 @@ class MyApplicationSerializer(serializers.ModelSerializer):
         model = LoanApplication
         # Officers' internal review notes and reviewer names are deliberately not exposed.
         fields = ["id", "reference", "product", "product_name", "amount_requested", "term_months", "purpose",
-                  "status", "status_label", "submitted_at", "info_request_message", "approved_amount",
+                  "items_description", "status", "status_label", "submitted_at", "info_request_message", "approved_amount",
                   "approved_term_months", "decided_at", "decision_reason", "cancelled_at", "created_at",
                   "documents", "guarantors", "guarantors_required", "loan", "quote", "can_edit", "can_cancel"]
 
@@ -128,6 +128,8 @@ class MyApplicationWriteSerializer(serializers.Serializer):
     amount_requested = serializers.DecimalField(**POSITIVE)
     term_months = serializers.IntegerField(min_value=1)
     purpose = serializers.CharField(max_length=2000)
+    items_description = serializers.CharField(max_length=2000, required=False, allow_blank=True, default="",
+                                              help_text="Commodity loans: the goods being bought.")
 
 
 class DocumentUploadSerializer(serializers.Serializer):

@@ -1,6 +1,6 @@
 # EMDI Cooperative Management System — Architecture
 
-**EMDI Cooperative Society** · Engineering Materials Development Institute (EMDI) · NASENI
+**EMDI Cooperative Multipurpose Society Ltd** · EMDI Complex, Akure · Engineering Materials Development Institute (EMDI) · NASENI
 
 | | |
 |---|---|
@@ -308,7 +308,7 @@ Conventions for every table:
 
 **CooperativeSettings**: a singleton table, one row, `id=1` enforced by `CHECK`.
 
-- **Identity:** `name` ("EMDI Cooperative Society"), `short_name`, `registration_number`, `address`, `email`, `phone`, `logo`
+- **Identity:** `name` ("EMDI Cooperative Multipurpose Society Ltd"), `short_name`, `registration_number`, `address`, `email`, `phone`, `logo`
 - **Formats:** `currency_code` (NGN), `membership_number_format`, `saver_number_format` (EMDI/XMAS/{seq:04d}, for Christmas savers who are not members), `financial_year_start_month` (1)
 - **Dividends:** `dividend_processing_month` (12)
 - **Withdrawals:** `member_withdrawal_requests_enabled` (**False**, global switch that sits above the product-level flags)
@@ -1061,6 +1061,7 @@ The **Enforced by** column says where each rule is guaranteed. A frontend check 
 | BR-31 | A member may guarantee loans totalling at most a multiple of their savings (2× by default, `guarantor_savings_multiple`; blank means no limit). Only accepted guarantees on applications in progress and running loans count. | `loans/selectors.guarantee_room`; checked when choosing, at submission and on acceptance; tests in `loans/tests/test_loopholes.py` |
 | BR-32 | Members may borrow up to 3× their Regular Savings, the balance built from the statutory monthly contributions (Christmas Savings and other products don't count). The limit covers total borrowing: what is still owed on running loans, loans awaiting disbursement and approved applications, plus the new loan. A product may set a stricter multiple. | `loans/eligibility.borrowing_limit` / `current_borrowing`, part of the eligibility check at submission and approval (BR-22); setting `loan_savings_multiple`; tests in `loans/tests/test_borrowing_limit.py` |
 | BR-33 | Christmas Savings is open to members and non-members. A non-member is registered as a **Christmas saver**: numbered in a separate series (`saver_number_format`, e.g. EMDI/XMAS/0001), saves only in products marked `open_to_non_members` (Christmas Savings), has no portal access, and is left out of Regular Savings and the monthly contribution, loans and guaranteeing, investments, dividends, broadcasts and membership counts. An officer with `add_member` and `change_member` can make a saver a full member, keeping the record and Christmas history (new member number; membership counts from that day). | `Member.membership_type`; `savings/rules.non_member_problem`; `accounts/permissions.member_profile`; `members/services.convert_to_member`; tests in `members/tests/test_christmas_savers.py` |
+| BR-34 | Practices from the society's own ledgers: (a) running loans are taken on at go-live as LOAN_OPENING_BALANCE (a `LOAN_OPENING_BALANCES` batch gives each loan's outstanding balance and monthly repayment or months left; the system builds the schedule on the product's terms; maker–checker); savings and share-capital opening balances can carry a balance date; (b) each Christmas Savings cycle has a `bonus_rate`, paid at payout as a SAVINGS_CYCLE_BONUS credit before the payout of balance plus bonus; (c) officers may withdraw from Regular Savings with a second officer's approval, but not below what secures the member's loans (BR-32) and guarantees (BR-31); members still cannot (BR-01); (d) commodity loans (product `loan_type`) need a description of the goods and pay a named supplier. | `loans/services.bring_forward_loan`, `loans/batches.LoanOpeningBalanceBatchHandler`; `savings/services.set_cycle_bonus`, `prepare_cycle_payout`, `_assert_security_kept`; tests in `loans/tests/test_real_ledger_practices.py` |
 
 ---
 

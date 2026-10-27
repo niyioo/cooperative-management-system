@@ -210,7 +210,8 @@ function ChristmasSavings() {
             </div>
             {Number(data.paid_out) > 0 && (
               <p className="mt-3 flex items-center gap-2 text-sm text-emerald-700">
-                <Info className="h-4 w-4" aria-hidden="true" /> {formatNaira(data.paid_out)} has been paid out to you.
+                <Info className="h-4 w-4" aria-hidden="true" /> {formatNaira(data.paid_out)} has been paid out to you
+                {Number(data.bonus) > 0 ? `, including a ${Number(data.bonus_rate)}% bonus of ${formatNaira(data.bonus)}` : ''}.
               </p>
             )}
           </CardBody>

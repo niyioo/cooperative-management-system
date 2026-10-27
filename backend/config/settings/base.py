@@ -341,6 +341,6 @@ JAZZMIN_SETTINGS = {
     "site_header": "EMDI Cooperative",
     "site_brand": "EMDI Cooperative",
     "welcome_sign": "Restricted — Super Administrator support console",
-    "copyright": "EMDI Cooperative Society",
+    "copyright": "EMDI Cooperative Multipurpose Society Ltd",
     "show_ui_builder": False,
 }

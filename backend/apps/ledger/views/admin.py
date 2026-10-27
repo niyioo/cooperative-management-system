@@ -170,7 +170,7 @@ class BatchViewSet(OfficerAPIMixin, mixins.ListModelMixin, mixins.RetrieveModelM
             request.user,
             batch_type=data["batch_type"],
             file=data["file"],
-            options={"product": data["product"], "period": data["period"]},
+            options={"product": data["product"], "period": data["period"], "balance_date": data["balance_date"]},
             description=data["description"],
         )
         return Response(BatchSerializer(batch).data, status=status.HTTP_201_CREATED)

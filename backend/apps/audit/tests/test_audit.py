@@ -65,7 +65,7 @@ class TestSettingsApi:
     def test_any_officer_reads_only_settings_managers_change(self, as_user, treasurer):
         loan_officer = make_officer("Loan Officer")
         data = as_user(loan_officer).get(SETTINGS).data
-        assert data["name"] == "EMDI Cooperative Society"
+        assert data["name"] == "EMDI Cooperative Multipurpose Society Ltd"
         assert "SAVINGS_WITHDRAWAL" in data["maker_checker_types"]
         assert as_user(treasurer).patch(SETTINGS, {"loan_overdue_grace_days": 3}, format="json").status_code == 403
 

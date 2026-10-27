@@ -102,7 +102,7 @@ export default function Dashboard() {
 
   return (
     <>
-      <PageHeader title={`Welcome, ${user.first_name}`} description="EMDI Cooperative Society at a glance." />
+      <PageHeader title={`Welcome, ${user.first_name}`} description="EMDI Cooperative Multipurpose Society Ltd at a glance." />
       <QueryState query={dashboard}>
         {(d) => (
           <div className="space-y-6">

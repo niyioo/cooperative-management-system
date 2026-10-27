@@ -43,6 +43,7 @@ from .models import (
     LoanGuarantor,
     LoanProduct,
     LoanRepayment,
+    LoanType,
     RepaymentAllocation,
     RepaymentInstallment,
 )
@@ -61,6 +62,7 @@ PRODUCT_FIELDS = [
     "min_amount",
     "max_amount",
     "max_savings_multiple",
+    "loan_type",
     "min_term_months",
     "max_term_months",
     "allowed_terms",
@@ -164,7 +166,7 @@ def _assert_status(application, allowed, action):
 
 
 @transaction.atomic
-def create_application(actor, *, member, product, amount_requested, term_months, purpose):
+def create_application(actor, *, member, product, amount_requested, term_months, purpose, items_description=""):
     if member.user_id != actor.pk:
         require_perm(actor, P.REVIEW_LOAN_APPLICATION)
         assert_not_self(actor, member, "file loan applications for")
@@ -176,6 +178,7 @@ def create_application(actor, *, member, product, amount_requested, term_months,
         amount_requested=to_money(amount_requested),
         term_months=term_months,
         purpose=purpose,
+        items_description=(items_description or "").strip(),
     )
     record("loan.application_created", actor=actor, obj=application, metadata={"on_behalf": member.user_id != actor.pk})
     return application
@@ -189,7 +192,7 @@ def update_application(actor, application, **data):
     if "product" in data and data["product"] != application.product and application.status != APP.DRAFT:
         _field_error("product", "The product can only change while the application is a draft.", "product_locked")
     changes = {}
-    for field in ("product", "amount_requested", "term_months", "purpose"):
+    for field in ("product", "amount_requested", "term_months", "purpose", "items_description"):
         if field in data and getattr(application, field) != data[field]:
             changes[field] = [str(getattr(application, field)), str(data[field])]
             setattr(application, field, data[field])
@@ -218,6 +221,8 @@ def submit_application(actor, application):
             code="not_eligible",
             fields={"checks": failures},
         )
+    if application.product.loan_type == LoanType.COMMODITY and not application.items_description.strip():
+        _field_error("items_description", "Describe the goods being bought on credit.", "items_required")
     needed = application.product.guarantors_required
     standing = application.guarantors.exclude(status=LoanGuarantor.Status.DECLINED).count()
     if standing < needed:
@@ -533,7 +538,7 @@ def reject_application(actor, application, *, reason):
 # ---------------------------------------------------------------------------
 
 @transaction.atomic
-def disburse(actor, application, *, disbursed_on=None, external_reference=""):
+def disburse(actor, application, *, disbursed_on=None, external_reference="", supplier=""):
     """
     Create the loan (terms snapshotted, schedule generated) and its
     disbursement entry. With maker-checker (the default) the loan waits in
@@ -550,6 +555,9 @@ def disburse(actor, application, *, disbursed_on=None, external_reference=""):
         _field_error("disbursed_on", "Cannot be in the future.", "future_date")
 
     product = application.product
+    supplier = (supplier or "").strip()
+    if product.loan_type == LoanType.COMMODITY and not supplier:
+        _field_error("supplier", "Name the supplier of the goods.", "supplier_required")
     schedule = schedule_for_product(product, application.approved_amount, application.approved_term_months, disbursed_on)
     loan = Loan.objects.create(
         application=application,
@@ -566,6 +574,7 @@ def disburse(actor, application, *, disbursed_on=None, external_reference=""):
         first_due_date=schedule.first_due_date,
         maturity_date=schedule.maturity_date,
         status=Loan.Status.PENDING_DISBURSEMENT,
+        supplier=supplier,
     )
     RepaymentInstallment.objects.bulk_create(
         [
@@ -581,7 +590,8 @@ def disburse(actor, application, *, disbursed_on=None, external_reference=""):
         amount=loan.principal,
         account=loan,
         value_date=disbursed_on,
-        description=f"Disbursement of {loan.reference} ({product.name})",
+        description=(f"Goods from {supplier} for {loan.reference} ({product.name})" if supplier
+                     else f"Disbursement of {loan.reference} ({product.name})"),
         external_reference=external_reference,
     )
     loan.refresh_from_db()
@@ -589,6 +599,7 @@ def disburse(actor, application, *, disbursed_on=None, external_reference=""):
 
 
 @on_posted(TransactionType.LOAN_DISBURSEMENT)
+@on_posted(TransactionType.LOAN_OPENING_BALANCE)
 def _activate_loan(entry):
     loan = Loan.objects.select_for_update().get(pk=entry.loan_id)
     if loan.status != Loan.Status.PENDING_DISBURSEMENT:
@@ -623,6 +634,9 @@ def _activate_loan(entry):
     loan.save(update_fields=["status", "updated_at"])
     if loan.application_id:
         LoanApplication.objects.filter(pk=loan.application_id).update(status=APP.DISBURSED, updated_at=timezone.now())
+    if loan.is_migrated:
+        record("loan.brought_forward", actor=actor, obj=loan, metadata={"outstanding": loan.principal, "interest": loan.total_interest})
+        return
     record("loan.disbursed", actor=actor, obj=loan, metadata={"principal": loan.principal, "interest": loan.total_interest})
     notifications.notify_member(
         loan.member, category=notifications.Category.LOAN,
@@ -633,6 +647,7 @@ def _activate_loan(entry):
 
 
 @on_rejected(TransactionType.LOAN_DISBURSEMENT)
+@on_rejected(TransactionType.LOAN_OPENING_BALANCE)
 def _cancel_loan(entry):
     loan = Loan.objects.select_for_update().get(pk=entry.loan_id)
     if loan.status == Loan.Status.PENDING_DISBURSEMENT:
@@ -781,4 +796,86 @@ def mark_default(actor, loan, *, reason):
         body="Repayments on this loan are overdue. Please contact the cooperative secretariat to arrange payment.",
         link=notifications.link("loan", id=loan.pk),
     )
+    return loan
+
+
+# ---------------------------------------------------------------------------
+# Go-live: loans brought forward from the previous records
+# ---------------------------------------------------------------------------
+
+MAX_BROUGHT_FORWARD_TERM = 360
+
+
+def term_for_repayment(product, outstanding, monthly_repayment, balance_date):
+    """The fewest months whose first instalment (principal + interest) fits within the monthly repayment."""
+    for months in range(1, MAX_BROUGHT_FORWARD_TERM + 1):
+        first = schedule_for_product(product, outstanding, months, balance_date).instalments[0]
+        if first.principal + first.interest <= monthly_repayment:
+            return months
+    return None
+
+
+@transaction.atomic
+def bring_forward_loan(actor, *, member, product, outstanding, balance_date, monthly_repayment=None, term_months=None,
+                       batch=None, external_reference=""):
+    """
+    A loan already running in the previous records, taken on at go-live: what
+    is still owed on `balance_date` becomes the principal, repaid on the
+    product's terms over `term_months` (or as many months as `monthly_repayment`
+    needs). The balance is posted as LOAN_OPENING_BALANCE and, like a
+    disbursement, waits for a second officer unless maker-checker is off.
+    """
+    require_perm(actor, P.DISBURSE_LOAN)
+    assert_not_self(actor, member, "bring forward loans for")
+    if not member.is_full_member or member.status == MemberStatus.CLOSED:
+        raise DomainError(f"{member.full_name} cannot hold a loan.", code="not_eligible")
+    outstanding = to_money(outstanding)
+    if outstanding <= 0:
+        _field_error("outstanding", "Enter what is still owed.", "invalid_amount")
+    if balance_date > timezone.localdate():
+        _field_error("balance_date", "Cannot be in the future.", "future_date")
+    if term_months is None:
+        if not monthly_repayment:
+            _field_error("monthly_repayment", "Give the monthly repayment or the number of months left.", "terms_required")
+        term_months = term_for_repayment(product, outstanding, to_money(monthly_repayment), balance_date)
+        if term_months is None:
+            _field_error("monthly_repayment", "This repayment would never clear the loan on the product's interest rate.",
+                         "repayment_too_low")
+    schedule = schedule_for_product(product, outstanding, term_months, balance_date)
+    loan = Loan.objects.create(
+        application=None,
+        is_migrated=True,
+        member=member,
+        product=product,
+        principal=outstanding,
+        interest_rate=product.interest_rate,
+        interest_rate_basis=product.interest_rate_basis,
+        interest_method=product.interest_method,
+        interest_collection=product.interest_collection,
+        term_months=term_months,
+        total_interest=schedule.total_interest,
+        disbursed_on=balance_date,
+        first_due_date=schedule.first_due_date,
+        maturity_date=schedule.maturity_date,
+        status=Loan.Status.PENDING_DISBURSEMENT,
+    )
+    RepaymentInstallment.objects.bulk_create(
+        [
+            RepaymentInstallment(loan=loan, number=i.number, due_date=i.due_date, principal_due=i.principal, interest_due=i.interest)
+            for i in schedule.instalments
+        ]
+    )
+    ledger.create_entry(
+        actor,
+        member=member,
+        txn_type=TransactionType.LOAN_OPENING_BALANCE,
+        amount=outstanding,
+        account=loan,
+        value_date=balance_date,
+        description=f"{product.name} balance brought forward ({loan.reference})",
+        external_reference=external_reference,
+        batch=batch,
+        audit=batch is None,
+    )
+    loan.refresh_from_db()
     return loan

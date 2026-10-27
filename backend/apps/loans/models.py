@@ -33,6 +33,12 @@ class InterestCollection(models.TextChoices):
     UPFRONT = "UPFRONT", "Deducted at disbursement"
 
 
+class LoanType(models.TextChoices):
+    STANDARD = "STANDARD", "Cash loan"
+    EMERGENCY = "EMERGENCY", "Emergency loan"
+    COMMODITY = "COMMODITY", "Commodity loan (goods on credit)"
+
+
 class LoanProduct(TimeStampedModel):
     name = models.CharField(max_length=100, unique=True)
     code = models.CharField(max_length=20, unique=True)
@@ -75,6 +81,12 @@ class LoanProduct(TimeStampedModel):
     )
     required_documents = ArrayField(
         models.CharField(max_length=150), default=list, blank=True
+    )
+    loan_type = models.CharField(
+        max_length=10,
+        choices=LoanType.choices,
+        default=LoanType.STANDARD,
+        help_text="Commodity loans pay a supplier for goods instead of paying cash to the member.",
     )
     allow_topup = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
@@ -134,6 +146,7 @@ class LoanApplication(ReferenceMixin, TimeStampedModel):
     amount_requested = MoneyField()
     term_months = models.PositiveSmallIntegerField()
     purpose = models.TextField()
+    items_description = models.TextField(blank=True, help_text="Commodity loans: the goods being bought.")
     status = models.CharField(max_length=15, choices=Status.choices, default=Status.DRAFT)
 
     eligibility_snapshot = models.JSONField(
@@ -272,6 +285,7 @@ class Loan(ReferenceMixin, TimeStampedModel):
     completed_on = models.DateField(null=True, blank=True)
     defaulted_on = models.DateField(null=True, blank=True)
     is_migrated = models.BooleanField(default=False)
+    supplier = models.CharField(max_length=150, blank=True, help_text="Commodity loans: who supplied the goods.")
 
     class Meta(TimeStampedModel.Meta):
         ordering = ["-disbursed_on", "-created_at"]

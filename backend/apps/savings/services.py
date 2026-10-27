@@ -12,6 +12,7 @@ from apps.accounts.permissions import assert_not_self, require_perm
 from apps.accounts.perms import P
 from apps.audit.services import record
 from apps.common.exceptions import DomainError
+from apps.common.money import to_money
 from apps.ledger import services as ledger
 from apps.ledger.choices import BatchStatus, BatchType, TransactionType
 from apps.ledger.models import Transaction, TransactionBatch
@@ -202,6 +203,25 @@ def close_cycle(actor, cycle):
     return cycle
 
 
+@transaction.atomic
+def set_cycle_bonus(actor, cycle, *, bonus_rate):
+    """The bonus paid on top of each balance at payout (e.g. 8.9% for 2025). Fixed once the payout is prepared."""
+    require_perm(actor, P.MANAGE_SAVINGS_CYCLES)
+    cycle = SavingsCycle.objects.select_for_update().get(pk=cycle.pk)
+    if cycle.status == SavingsCycle.Status.PAID_OUT or open_payout_batch(cycle):
+        raise DomainError("The bonus can't change once the payout has been prepared.", code="payout_in_progress")
+    changes = _diff_and_apply(cycle, {"bonus_rate": bonus_rate}, ["bonus_rate"])
+    if changes:
+        cycle.save(update_fields=["bonus_rate", "updated_at"])
+        record("savings.cycle_bonus_set", actor=actor, obj=cycle, changes=changes)
+    return cycle
+
+
+def cycle_bonus(balance, rate):
+    """Bonus on one balance, rounded half-up to the kobo."""
+    return to_money(balance * rate / 100) if rate and balance > 0 else to_money(0)
+
+
 def open_payout_batch(cycle):
     return TransactionBatch.objects.filter(
         batch_type=BatchType.CYCLE_PAYOUTS,
@@ -213,8 +233,10 @@ def open_payout_batch(cycle):
 @transaction.atomic
 def prepare_cycle_payout(actor, cycle, *, value_date=None, description=""):
     """
-    Build a payout batch: one SAVINGS_CYCLE_PAYOUT per account with a balance.
-    Another officer approves the batch; posting it marks the cycle PAID_OUT.
+    Build a payout batch. For each account with a balance: the cycle's bonus
+    (if any) as a SAVINGS_CYCLE_BONUS credit, then one SAVINGS_CYCLE_PAYOUT of
+    balance plus bonus. Another officer approves the batch; posting it marks
+    the cycle PAID_OUT.
     """
     require_perm(actor, P.MANAGE_BATCHES, P.POST_SAVINGS_WITHDRAWAL)
     cycle = SavingsCycle.objects.select_for_update(of=("self",)).select_related("product").get(pk=cycle.pk)
@@ -226,13 +248,26 @@ def prepare_cycle_payout(actor, cycle, *, value_date=None, description=""):
     accounts = with_balance(cycle.accounts.select_related("member"), "savings_account").filter(balance__gt=0)
 
     def build(batch):
-        batch.validation_report = {"cycle_id": str(cycle.pk)}
+        batch.validation_report = {"cycle_id": str(cycle.pk), "bonus_rate": str(cycle.bonus_rate)}
         for account in accounts:
+            bonus = cycle_bonus(account.balance, cycle.bonus_rate)
+            if bonus > 0:
+                ledger.create_entry(
+                    actor,
+                    member=account.member,
+                    txn_type=TransactionType.SAVINGS_CYCLE_BONUS,
+                    amount=bonus,
+                    account=account,
+                    value_date=value_date,
+                    description=f"{cycle} bonus at {cycle.bonus_rate.normalize()}%",
+                    batch=batch,
+                    audit=False,
+                )
             ledger.create_entry(
                 actor,
                 member=account.member,
                 txn_type=TransactionType.SAVINGS_CYCLE_PAYOUT,
-                amount=account.balance,
+                amount=account.balance + bonus,
                 account=account,
                 value_date=value_date,
                 description=description or f"{cycle} payout",
@@ -341,6 +376,40 @@ def post_contribution(actor, *, account, amount, period=None, value_date=None, d
     )
 
 
+def _assert_security_kept(account, amount):
+    """
+    Regular Savings secure the member's loans (BR-32) and guarantees (BR-31).
+    A withdrawal may not leave what they owe, or what they guarantee, beyond
+    the multiples the remaining savings allow.
+    """
+    from apps.configuration.models import CooperativeSettings
+    from apps.loans.eligibility import current_borrowing, eligible_savings
+    from apps.loans.selectors import guarantee_exposure
+
+    if not statutory.is_statutory(account):
+        return
+    member, coop = account.member, CooperativeSettings.load()
+    remaining = eligible_savings(member) - amount
+    owed = current_borrowing(member)
+    if coop.loan_savings_multiple and owed > remaining * coop.loan_savings_multiple:
+        most = max(eligible_savings(member) - owed / coop.loan_savings_multiple, 0)
+        _field_error(
+            "amount",
+            f"{member.full_name} owes ₦{owed:,.2f}, which needs Regular Savings of at least "
+            f"₦{owed / coop.loan_savings_multiple:,.2f}. At most ₦{to_money(most):,.2f} can be withdrawn.",
+            "loans_unsecured",
+        )
+    guaranteed = guarantee_exposure(member)
+    if coop.guarantor_savings_multiple and guaranteed > remaining * coop.guarantor_savings_multiple:
+        most = max(eligible_savings(member) - guaranteed / coop.guarantor_savings_multiple, 0)
+        _field_error(
+            "amount",
+            f"{member.full_name} guarantees ₦{guaranteed:,.2f} of other members' loans. "
+            f"At most ₦{to_money(most):,.2f} can be withdrawn.",
+            "guarantees_unsecured",
+        )
+
+
 @transaction.atomic
 def post_withdrawal(actor, *, account, amount, reason, value_date=None):
     """Officer-only, and only for products configured to allow it. Off for every EMDI product."""
@@ -354,6 +423,7 @@ def post_withdrawal(actor, *, account, amount, reason, value_date=None):
     if not (reason or "").strip():
         _field_error("reason", "Please give a reason.", "reason_required")
     ledger.assert_sufficient_balance(account, amount)
+    _assert_security_kept(account, amount)
     return ledger.create_entry(
         actor,
         member=account.member,

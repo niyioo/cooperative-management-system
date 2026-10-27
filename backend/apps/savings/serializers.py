@@ -60,6 +60,7 @@ class SavingsCycleSerializer(serializers.ModelSerializer):
             "start_date",
             "end_date",
             "expected_monthly_contribution",
+            "bonus_rate",
             "status",
             "status_label",
             "account_count",
@@ -77,6 +78,11 @@ class SavingsCycleCreateSerializer(serializers.Serializer):
 
 class SavingsCycleUpdateSerializer(serializers.Serializer):
     expected_monthly_contribution = serializers.DecimalField(min_value=0, **MONEY)
+
+
+class CycleBonusSerializer(serializers.Serializer):
+    bonus_rate = serializers.DecimalField(max_digits=5, decimal_places=2, min_value=0, max_value=100,
+                                          help_text="Percentage of each balance added at payout, e.g. 8.90.")
 
 
 class PayoutSerializer(serializers.Serializer):

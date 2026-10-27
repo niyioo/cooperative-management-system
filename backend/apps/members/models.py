@@ -174,8 +174,14 @@ class Member(TimeStampedModel):
 
         settings_row = CooperativeSettings.load()
         if membership_type == MembershipType.CHRISTMAS_SAVER:
-            return settings_row.saver_number_format.format(seq=next_value("CHRISTMAS_SAVER"), year=timezone.localdate().year)
-        return settings_row.membership_number_format.format(seq=next_value("MEMBERSHIP"), year=timezone.localdate().year)
+            fmt, key = settings_row.saver_number_format, "CHRISTMAS_SAVER"
+        else:
+            fmt, key = settings_row.membership_number_format, "MEMBERSHIP"
+        # Members brought over from the old records keep their numbers, so skip any already taken.
+        while True:
+            number = fmt.format(seq=next_value(key), year=timezone.localdate().year)
+            if not Member.objects.filter(membership_number__iexact=number).exists():
+                return number
 
     @property
     def is_full_member(self):

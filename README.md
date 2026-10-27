@@ -1,6 +1,6 @@
-# EMDI Cooperative Society — Cooperative Management System
+# EMDI Cooperative Multipurpose Society Ltd — Cooperative Management System
 
-The member and officer portal for the **EMDI Cooperative Society** (Engineering Materials Development Institute, NASENI): membership records, savings (with Christmas Savings kept separate), loans, investments, dividends, account closure, reports and notifications, on one auditable ledger.
+The member and officer portal for the **EMDI Cooperative Multipurpose Society Ltd**, EMDI Complex, Akure (Engineering Materials Development Institute, NASENI): membership records, savings (with Christmas Savings kept separate), loans, investments, dividends, account closure, reports and notifications, on one auditable ledger.
 
 - **Members** see their own savings, loans, investments, dividends and transactions, apply for loans, download statements and request account closure. They cannot withdraw savings through the portal.
 - **Officers** (Chairman, Secretary, Treasurer, Accountant, Loan and Investment Officers, Auditor, Super Administrator) work within role-based permissions, with maker–checker approval on money movements and a full audit trail.
@@ -145,4 +145,4 @@ The backend tests need PostgreSQL (the schema uses PostgreSQL triggers and const
 - **Every financial operation is auditable**: posted ledger entries are immutable (corrections are reversals), approvals need a second officer, and every action is in the audit log.
 - **Members see only their own data**, and officers act only within their role's permissions.
 
-The full list (BR-01 to BR-33), with where each rule is enforced, is in [docs/ARCHITECTURE.md §10](docs/ARCHITECTURE.md#10-business-rules).
+The full list (BR-01 to BR-34), with where each rule is enforced, is in [docs/ARCHITECTURE.md §10](docs/ARCHITECTURE.md#10-business-rules).

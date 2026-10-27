@@ -8,7 +8,7 @@ export default function AuthLayout() {
       <main className="mt-8 w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-lg sm:p-8">
         <Outlet />
       </main>
-      <p className="mt-6 text-center text-xs text-slate-400">© {new Date().getFullYear()} EMDI Cooperative Society · Akure</p>
+      <p className="mt-6 text-center text-xs text-slate-400">© {new Date().getFullYear()} EMDI Cooperative Multipurpose Society Ltd · EMDI Complex, Akure</p>
     </div>
   );
 }

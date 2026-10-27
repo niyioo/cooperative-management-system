@@ -64,6 +64,8 @@ def cycle_grid(cycle, accounts):
     for row in rows:
         if row["txn_type"] == TransactionType.SAVINGS_CYCLE_PAYOUT:
             key = "paid_out"
+        elif row["txn_type"] == TransactionType.SAVINGS_CYCLE_BONUS:
+            key = "bonus"
         else:
             month = row["period"].strftime("%Y-%m") if row["period"] else None
             key = month if month in month_keys else "other"
@@ -71,7 +73,7 @@ def cycle_grid(cycle, accounts):
         account_cells[key] = account_cells.get(key, ZERO) + row["net"]
 
     column_totals = {k: ZERO for k in month_keys + ["other"]}
-    paid_out_total = ZERO
+    paid_out_total = bonus_total = ZERO
     result = []
     for account in accounts:
         by_month = cells.get(account.pk, {})
@@ -84,7 +86,8 @@ def cycle_grid(cycle, accounts):
             "member_name": account.member.full_name,
             "months": {k: by_month.get(k, ZERO) for k in month_keys},
             "other": by_month.get("other", ZERO),
-            "total": sum((v for k, v in by_month.items() if k != "paid_out"), ZERO),
+            "total": sum((v for k, v in by_month.items() if k not in ("paid_out", "bonus")), ZERO),
+            "bonus": by_month.get("bonus", ZERO),
             "paid_out": -by_month.get("paid_out", ZERO),
             "expected_monthly": expected_monthly,
             "expected_total": expected_monthly * len(months),
@@ -93,10 +96,11 @@ def cycle_grid(cycle, accounts):
             column_totals[k] += entry["months"][k]
         column_totals["other"] += entry["other"]
         paid_out_total += entry["paid_out"]
+        bonus_total += entry["bonus"]
         result.append(entry)
     return {
-        "cycle": {"id": str(cycle.pk), "name": str(cycle), "status": cycle.status},
+        "cycle": {"id": str(cycle.pk), "name": str(cycle), "status": cycle.status, "bonus_rate": cycle.bonus_rate},
         "months": month_keys,
         "rows": result,
-        "totals": {**column_totals, "total": sum(column_totals.values(), ZERO), "paid_out": paid_out_total},
+        "totals": {**column_totals, "total": sum(column_totals.values(), ZERO), "bonus": bonus_total, "paid_out": paid_out_total},
     }

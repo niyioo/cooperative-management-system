@@ -7,6 +7,7 @@ are REGULAR products with one continuous account per member. Balances are
 never stored; they are derived from the ledger.
 """
 from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import F, Q
 from django.utils import timezone
@@ -135,6 +136,13 @@ class SavingsCycle(TimeStampedModel):
     start_date = models.DateField()
     end_date = models.DateField()
     expected_monthly_contribution = MoneyField(default=0)
+    bonus_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        help_text="Percentage added to each saver's balance at payout (e.g. 8.90). Set each year before the payout.",
+    )
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.UPCOMING)
     opened_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"

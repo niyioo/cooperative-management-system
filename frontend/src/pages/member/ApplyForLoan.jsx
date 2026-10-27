@@ -200,6 +200,10 @@ function PurposeAndDocuments({ product, form, update, onBack, onNext }) {
       <CardBody className="space-y-5">
         <TextAreaField label="What is the loan for?" required value={form.purpose} onChange={(e) => update({ purpose: e.target.value })}
           hint="A short explanation helps the committee, e.g. “School fees for two children”." maxLength={2000} />
+        {product.loan_type === 'COMMODITY' && (
+          <TextAreaField label="Goods you are buying" required value={form.items_description || ''} maxLength={2000}
+            onChange={(e) => update({ items_description: e.target.value })} hint="e.g. deep freezer, make and model. The supplier is paid directly." />
+        )}
         <div>
           <p className="text-sm font-medium text-slate-700">Supporting documents</p>
           {product.required_documents.length > 0 && (
@@ -223,7 +227,7 @@ function PurposeAndDocuments({ product, form, update, onBack, onNext }) {
         </div>
         <div className="flex justify-between">
           <Button variant="secondary" icon={ArrowLeft} onClick={onBack}>Back</Button>
-          <Button icon={ArrowRight} disabled={form.purpose.trim().length < 3} onClick={onNext}>Continue</Button>
+          <Button icon={ArrowRight} disabled={form.purpose.trim().length < 3 || (product.loan_type === 'COMMODITY' && !(form.items_description || '').trim())} onClick={onNext}>Continue</Button>
         </div>
       </CardBody>
     </Card>
@@ -288,7 +292,7 @@ function Review({ product, form, update, onBack }) {
     try {
       let id = draftId;
       if (!id) {
-        const draft = await memberApi.createApplication({ product: product.id, amount_requested: form.amount, term_months: Number(form.term), purpose: form.purpose.trim() });
+        const draft = await memberApi.createApplication({ product: product.id, amount_requested: form.amount, term_months: Number(form.term), purpose: form.purpose.trim(), items_description: (form.items_description || '').trim() });
         id = draft.id;
         setDraftId(id);
         for (const guarantor of form.guarantors) {

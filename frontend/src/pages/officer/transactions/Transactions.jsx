@@ -166,8 +166,8 @@ function UploadBatchButton() {
   const template = useMutation({ mutationFn: (type) => adminApi.batches.template(type).then((res) => saveBlob(res, `${type.toLowerCase()}-template.xlsx`)) });
   return (
     <FormModal trigger="Upload batch" triggerIcon={Upload} title="Upload a batch" submitLabel="Upload and check"
-      defaultValues={{ batch_type: 'CONTRIBUTIONS', product: '', period: currentPeriod(), description: '', file: null }}
-      transform={(v) => ({ ...v, file: v.file?.[0] })}
+      defaultValues={{ batch_type: 'CONTRIBUTIONS', product: '', period: currentPeriod(), balance_date: '', description: '', file: null }}
+      transform={(v) => ({ ...v, file: v.file?.[0], balance_date: v.balance_date || '' })}
       onSubmit={adminApi.batches.upload}
       onDone={(batch) => navigate(`/admin/transactions/batches/${batch.id}`)}
       renderFields={({ register, errors, watch }) => {
@@ -186,7 +186,12 @@ function UploadBatchButton() {
                 {(products.data || []).map((p) => <option key={p.id} value={p.code}>{p.name}</option>)}
               </SelectField>
             )}
-            <TextField label="Default month" type="month" {...register('period')} error={errors.period?.message} />
+            {type.endsWith('OPENING_BALANCES') ? (
+              <TextField label="Balance date" type="date" max={today()} {...register('balance_date')} error={errors.balance_date?.message}
+                hint="Date of the balances brought forward, e.g. 31 Dec 2025. Rows can give their own." />
+            ) : (
+              <TextField label="Default month" type="month" {...register('period')} error={errors.period?.message} />
+            )}
             <TextField label="Description" {...register('description')} error={errors.description?.message} hint="e.g. March payroll deductions" />
             <TextField label="File" type="file" accept=".xlsx,.csv" required {...register('file', { required: 'Choose a file.' })} error={errors.file?.message} />
           </>

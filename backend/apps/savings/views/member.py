@@ -53,6 +53,8 @@ class MyChristmasSavingsView(MemberAPIMixin, APIView):
                     "other": row["other"],
                     "total": row["total"],
                     "paid_out": row["paid_out"],
+                    "bonus": row["bonus"],
+                    "bonus_rate": account.cycle.bonus_rate,
                     "expected_monthly": row["expected_monthly"],
                     "expected_total": row["expected_total"],
                     "years": years,

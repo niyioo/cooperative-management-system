@@ -1,6 +1,6 @@
 // Brand constants. Colours are sampled from EMDI's official logo (emdi.gov.ng).
 export const BRAND = {
-    name: 'EMDI Cooperative Society',
+    name: 'EMDI Cooperative Multipurpose Society Ltd',
     shortName: 'EMDI Coop',
     institute: 'Engineering Materials Development Institute',
     parent: 'NASENI',

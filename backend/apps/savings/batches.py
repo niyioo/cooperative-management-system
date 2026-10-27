@@ -8,7 +8,7 @@ Savings batch types (ARCHITECTURE.md D5):
 from django.utils import timezone
 
 from apps.accounts.perms import P
-from apps.common.spreadsheets import SpreadsheetError, build_template, cell_text, parse_amount, parse_period
+from apps.common.spreadsheets import SpreadsheetError, build_template, cell_text, parse_amount, parse_date, parse_period
 from apps.ledger import services as ledger
 from apps.ledger.batches import BatchHandler
 from apps.ledger.choices import BatchType, TransactionStatus, TransactionType
@@ -19,6 +19,19 @@ from apps.notifications import services as notifications
 
 from .models import ProductKind, SavingsAccount, SavingsCycle, SavingsProduct
 from .rules import contribution_problems, month_start, resolve_account
+
+def _balance_date(values, options, row_errors):
+    """Opening balances: the row's Balance date, else the batch's, else today. Never in the future."""
+    try:
+        value = parse_date(values.get("balance_date")) or options.get("balance_date")
+    except ValueError as exc:
+        row_errors["balance_date"] = [str(exc)]
+        return None
+    if value and value > timezone.localdate():
+        row_errors["balance_date"] = ["Cannot be in the future."]
+        return None
+    return value
+
 
 def _products_by_code():
     return {p.code: p for p in SavingsProduct.objects.all()}
@@ -141,7 +154,9 @@ class OpeningBalanceBatchHandler(MemberRowsMixin, BatchHandler):
 
     batch_type = BatchType.OPENING_BALANCES
     permissions = (P.POST_SAVINGS_CONTRIBUTION,)
-    columns = {**IDENTIFIER_LABELS, "name": "Name", "product": "Product code", "amount": "Amount", "reference": "Reference"}
+    file_options = ("balance_date",)
+    columns = {**IDENTIFIER_LABELS, "name": "Name", "product": "Product code", "amount": "Amount",
+               "balance_date": "Balance date", "reference": "Reference"}
     required = {"product": "Product code", "amount": "Amount"}
 
     @staticmethod
@@ -177,6 +192,7 @@ class OpeningBalanceBatchHandler(MemberRowsMixin, BatchHandler):
             except ValueError as exc:
                 row_errors["amount"] = [str(exc)]
                 amount = None
+            balance_date = _balance_date(values, options, row_errors)
             if member and product and "product" not in row_errors:
                 if member.status == MemberStatus.CLOSED:
                     row_errors["membership_number"] = ["This membership is closed."]
@@ -191,7 +207,7 @@ class OpeningBalanceBatchHandler(MemberRowsMixin, BatchHandler):
                 errors.append({"row": row_number, "errors": row_errors})
             else:
                 lines.append({"row": row_number, "member": member, "product": product, "amount": amount,
-                              "reference": cell_text(values.get("reference"))[:100]})
+                              "balance_date": balance_date, "reference": cell_text(values.get("reference"))[:100]})
         return lines, batch_report(len(rows), errors, unknown)
 
     def create_lines(self, actor, batch, lines):
@@ -203,6 +219,7 @@ class OpeningBalanceBatchHandler(MemberRowsMixin, BatchHandler):
                 txn_type=TransactionType.SAVINGS_OPENING_BALANCE,
                 amount=line["amount"],
                 account=account,
+                value_date=line.get("balance_date"),
                 description=f"{line['product'].name} balance brought forward",
                 external_reference=line["reference"],
                 batch=batch,
@@ -227,9 +244,10 @@ class OpeningBalanceBatchHandler(MemberRowsMixin, BatchHandler):
                 ("Name", False, "For your own checking; ignored by the system."),
                 ("Product code", True, "A regular savings product, e.g. REGULAR."),
                 ("Amount", True, "Balance brought forward at go-live."),
+                ("Balance date", False, "e.g. 2025-12-31. Blank = the date chosen for the batch, or today."),
                 ("Reference", False, "e.g. the ledger page it came from."),
             ],
-            example_rows=[["EMDI/COOP/0001", "", "", "Adaeze Okafor", "REGULAR", 125000, "Ledger p.14"]],
+            example_rows=[["EMDI/COOP/0001", "", "", "Adaeze Okafor", "REGULAR", 125000, "2025-12-31", "Ledger p.14"]],
             notes=["Each account can have one opening balance. The batch needs a second officer's approval."],
         )
 
@@ -247,8 +265,12 @@ class CyclePayoutBatchHandler(BatchHandler):
 
     def revalidate(self, batch):
         problems = []
-        for entry in batch.transactions.filter(status=TransactionStatus.PENDING).select_related("member", "savings_account"):
-            balance = ledger.posted_balance(entry.savings_account)
+        pending = batch.transactions.filter(status=TransactionStatus.PENDING).select_related("member", "savings_account")
+        bonuses = {e.savings_account_id: e.amount for e in pending if e.txn_type == TransactionType.SAVINGS_CYCLE_BONUS}
+        for entry in pending:
+            if entry.txn_type != TransactionType.SAVINGS_CYCLE_PAYOUT:
+                continue
+            balance = ledger.posted_balance(entry.savings_account) + bonuses.get(entry.savings_account_id, 0)
             if balance != entry.amount:
                 problems.append({
                     "reference": entry.reference,
@@ -265,10 +287,16 @@ class CyclePayoutBatchHandler(BatchHandler):
         cycle.accounts.exclude(status=SavingsAccount.Status.CLOSED).update(
             status=SavingsAccount.Status.CLOSED, closed_on=today, updated_at=timezone.now()
         )
-        for entry in batch.transactions.select_related("member"):
+        entries = list(batch.transactions.select_related("member"))
+        bonuses = {e.savings_account_id: e.amount for e in entries if e.txn_type == TransactionType.SAVINGS_CYCLE_BONUS}
+        for entry in entries:
+            if entry.txn_type != TransactionType.SAVINGS_CYCLE_PAYOUT:
+                continue
+            bonus = bonuses.get(entry.savings_account_id)
+            extra = f", including a bonus of {notifications.naira(bonus)}," if bonus else ""
             notifications.notify_member(
                 entry.member, category=notifications.Category.SAVINGS,
                 title=f"{cycle} paid out",
-                body=f"Your {cycle} savings of {notifications.naira(entry.amount)} have been paid out.",
+                body=f"Your {cycle} savings of {notifications.naira(entry.amount)}{extra} have been paid out.",
                 link=notifications.link("savings"),
             )

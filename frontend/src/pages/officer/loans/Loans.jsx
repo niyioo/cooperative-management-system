@@ -15,7 +15,7 @@ import { CheckboxField, SelectField, TextField } from '../../../components/ui/Fi
 import QueryState from '../../../components/ui/QueryState';
 import StatCard from '../../../components/ui/StatCard';
 import { Money, Table, Td, Th } from '../../../components/ui/Table';
-import { INTEREST_COLLECTION, INTEREST_METHOD, LOAN_STATUS, RATE_BASIS, currentPeriod, label, options, today } from '../../../lib/choices';
+import { INTEREST_COLLECTION, INTEREST_METHOD, LOAN_STATUS, LOAN_TYPES, RATE_BASIS, currentPeriod, label, options, today } from '../../../lib/choices';
 import { formatDate, formatNaira } from '../../../lib/format';
 import { P, useCan } from '../../../lib/permissions';
 
@@ -131,7 +131,9 @@ export function LoanDetail() {
               )}
 
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <StatCard label="Principal" value={formatNaira(l.principal)} hint={`Disbursed ${formatDate(l.disbursed_on)}`} />
+                <StatCard label={l.is_migrated ? 'Brought forward' : 'Principal'} value={formatNaira(l.principal)}
+                  hint={l.is_migrated ? `Balance owed on ${formatDate(l.disbursed_on)} (old records)`
+                    : l.supplier ? `Goods from ${l.supplier}, ${formatDate(l.disbursed_on)}` : `Disbursed ${formatDate(l.disbursed_on)}`} />
                 <StatCard label="Interest" value={formatNaira(l.total_interest)} hint={label(INTEREST_COLLECTION, l.interest_collection)} />
                 <StatCard label="Outstanding" value={formatNaira(l.outstanding)} tone="amber" hint={`Matures ${formatDate(l.maturity_date)}`} />
                 <StatCard label="Next instalment" value={l.next_instalment ? formatNaira(l.next_instalment.remaining) : '—'} tone="slate"
@@ -178,7 +180,7 @@ export function LoanDetail() {
 }
 
 const PRODUCT_DEFAULTS = {
-  name: '', code: '', description: '', interest_rate: '', interest_rate_basis: 'PER_ANNUM', interest_method: 'FLAT', interest_collection: 'AMORTISED',
+  name: '', code: '', description: '', loan_type: 'STANDARD', interest_rate: '', interest_rate_basis: 'PER_ANNUM', interest_method: 'FLAT', interest_collection: 'AMORTISED',
   min_amount: '0', max_amount: '', max_savings_multiple: '', min_term_months: 1, max_term_months: 12, allowed_terms: '',
   min_membership_months: 0, max_active_loans: 1, guarantors_required: 1, required_documents: '', allow_topup: false, is_active: true,
 };
@@ -207,6 +209,7 @@ function ProductForm({ product }) {
             <TextField label="Code" required {...register('code', { required: 'Required.' })} error={errors.code?.message} />
           </div>
           <TextField label="Description" {...register('description')} error={errors.description?.message} />
+          <SelectField label="Type" {...register('loan_type')} hint="Commodity loans pay a supplier for goods instead of paying the member cash.">{options(LOAN_TYPES)}</SelectField>
           <div className="grid gap-4 sm:grid-cols-2">
             <TextField label="Interest rate (%)" required inputMode="decimal" {...register('interest_rate', { required: 'Required.' })} error={errors.interest_rate?.message} />
             <SelectField label="Rate applies" {...register('interest_rate_basis')}>{options(RATE_BASIS)}</SelectField>
