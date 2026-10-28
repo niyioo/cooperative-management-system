@@ -89,6 +89,7 @@ def create_entry(
     reverses=None,
     audit=True,
     require_approval=None,
+    channel="",
 ):
     """
     Create one ledger entry. Callers (module services) check business rules and
@@ -132,6 +133,7 @@ def create_entry(
         period=period,
         description=description,
         external_reference=external_reference,
+        channel=channel,
         batch=batch,
         closure_request=closure_request,
         reverses=reverses,

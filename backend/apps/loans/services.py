@@ -31,7 +31,7 @@ from apps.ledger.models import Transaction
 from apps.members.models import Member, MemberStatus
 from apps.notifications import services as notifications
 
-from .calculators import schedule_for_product
+from .calculators import end_month_deadline, longest_term_before, schedule_for_product
 from .eligibility import evaluate, hard_failures
 from .selectors import guarantee_room, guarantor_problem
 from .models import (
@@ -62,6 +62,9 @@ PRODUCT_FIELDS = [
     "min_amount",
     "max_amount",
     "max_savings_multiple",
+    "official_savings_multiple",
+    "must_end_by_month",
+    "open_to_non_members",
     "loan_type",
     "min_term_months",
     "max_term_months",
@@ -97,8 +100,9 @@ def _validate_product(data):
         _field_error("allowed_terms", f"Terms {bad_terms} are outside the term range.", "invalid_terms")
     if data["interest_method"] == InterestMethod.REDUCING_BALANCE and data["interest_rate_basis"] == InterestRateBasis.PER_LOAN:
         _field_error("interest_rate_basis", "Reducing-balance loans need a per-annum or per-month rate.", "invalid_rate_basis")
-    if data.get("guarantors_required", 1) < 1:
-        _field_error("guarantors_required", "Every loan needs at least one guarantor.", "guarantor_required")
+    if data.get("open_to_non_members") and data.get("guarantors_required", 0) > 0:
+        _field_error("guarantors_required", "Christmas savers cannot find member guarantors; loans open to them need none.",
+                     "non_member_guarantors")
 
 
 def _assert_unique_product(name, code, exclude_pk=None):
@@ -221,7 +225,7 @@ def submit_application(actor, application):
             code="not_eligible",
             fields={"checks": failures},
         )
-    if application.product.loan_type == LoanType.COMMODITY and not application.items_description.strip():
+    if application.product.loan_type in LoanType.for_goods() and not application.items_description.strip():
         _field_error("items_description", "Describe the goods being bought on credit.", "items_required")
     needed = application.product.guarantors_required
     standing = application.guarantors.exclude(status=LoanGuarantor.Status.DECLINED).count()
@@ -310,6 +314,8 @@ def _assert_shares_fit(application):
 
 def _shares(amount, count):
     """Split the amount requested equally; the first guarantor carries any kobo left over."""
+    if count == 0:
+        return []  # loans recovered from salary need no guarantors (BR-37)
     base = (amount / count).quantize(Decimal("0.01"), rounding=ROUND_DOWN)
     return [amount - base * (count - 1)] + [base] * (count - 1)
 
@@ -466,6 +472,8 @@ def approve_application(actor, application, *, approved_amount=None, approved_te
     application = _lock(application)
     assert_not_self(actor, application.member, "approve loans for")
     _assert_status(application, [APP.UNDER_REVIEW], "approved (it must be reviewed first)")
+    if application.reviewed_by_id == actor.pk:
+        raise DomainError("You collated this application, so another official must approve it.", code="maker_checker")
     amount = to_money(approved_amount) if approved_amount is not None else application.amount_requested
     term = approved_term_months or application.term_months
 
@@ -556,8 +564,17 @@ def disburse(actor, application, *, disbursed_on=None, external_reference="", su
 
     product = application.product
     supplier = (supplier or "").strip()
-    if product.loan_type == LoanType.COMMODITY and not supplier:
+    if product.loan_type in LoanType.for_goods() and not supplier:
         _field_error("supplier", "Name the supplier of the goods.", "supplier_required")
+    if product.must_end_by_month:
+        longest = longest_term_before(disbursed_on, product.must_end_by_month)
+        if application.approved_term_months > longest:
+            deadline = end_month_deadline(disbursed_on, product.must_end_by_month)
+            raise DomainError(
+                f"{product.name} loans must be repaid by {deadline:%B %Y}. Paid out on {disbursed_on:%d %B}, only "
+                f"{longest} instalment(s) fit; the approved term is {application.approved_term_months}.",
+                code="past_end_month",
+            )
     schedule = schedule_for_product(product, application.approved_amount, application.approved_term_months, disbursed_on)
     loan = Loan.objects.create(
         application=application,

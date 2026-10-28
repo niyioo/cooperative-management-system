@@ -229,7 +229,8 @@ class TestOfficerChangesTheAmount:
         assert past.data["error"]["code"] == "month_in_past"
 
     def test_viewing_needs_view_savings_and_changing_needs_posting_rights(self, as_user, secretary, account):
-        assert as_user(secretary).get(self.url(account)).status_code == 403
+        assert as_user(make_officer("Investment Officer")).get(self.url(account)).status_code == 403
+        assert as_user(secretary).post(self.url(account), {"amount": "6000"}, format="json").status_code == 403
         auditor = make_officer("Auditor")
         assert as_user(auditor).get(self.url(account)).status_code == 200
         assert as_user(auditor).post(self.url(account), {"amount": "6000"}, format="json").status_code == 403

@@ -120,6 +120,7 @@ class TestChristmasBonus:
         assert SavingsCycle.objects.get(pk=open_cycle.pk).status == SavingsCycle.Status.PAID_OUT
 
 
+@pytest.mark.borrowing_limit
 class TestOfficerWithdrawals:
     def test_a_withdrawal_cannot_leave_loans_under_secured(self, approved, borrower, treasurer, chairman):
         # Borrower has 100,000 in Regular Savings; 180,000 + 21,600 interest owed needs at least 67,200 at 3x.

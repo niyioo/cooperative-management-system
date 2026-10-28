@@ -8,6 +8,7 @@ import MemberLayout from '../layouts/MemberLayout';
 import { P, useCan } from '../lib/permissions';
 import ChangePassword from '../pages/auth/ChangePassword';
 import ForgotPassword from '../pages/auth/ForgotPassword';
+import JoinApplication from '../pages/auth/JoinApplication';
 import Login from '../pages/auth/Login';
 import SetPassword from '../pages/auth/SetPassword';
 import AccountClosure from '../pages/member/AccountClosure';
@@ -201,6 +202,8 @@ const officerRoutes = [
 
 const routes = [
   { path: '/', element: <HomeRedirect /> },
+  // The online membership form: a link anyone can open (BR-39).
+  { path: '/join', element: <JoinApplication /> },
   {
     element: <AuthLayout />,
     children: [

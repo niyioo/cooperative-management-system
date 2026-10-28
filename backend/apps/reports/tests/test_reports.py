@@ -44,7 +44,8 @@ def viewer_without_export():
 class TestCatalogue:
     def test_lists_only_reports_the_role_may_run(self, as_user, secretary, treasurer):
         secretary_keys = {r["key"] for r in as_user(secretary).get(URL).data}
-        assert secretary_keys == {"members", "account-closures"}
+        assert secretary_keys == {"members", "account-closures", "savings", "christmas-savings", "contribution-arrears",
+                                  "loans", "loan-repayments", "overdue-loans"}  # BR-37: collates loans
         treasurer_keys = {r["key"] for r in as_user(treasurer).get(URL).data}
         assert set(REGISTRY) == treasurer_keys
 

@@ -26,6 +26,7 @@ from .choices import (
     BatchStatus,
     BatchType,
     EntrySide,
+    PaymentChannel,
     TransactionStatus,
     TransactionType,
 )
@@ -166,6 +167,9 @@ class Transaction(ReferenceMixin, TimeStampedModel):
     description = models.CharField(max_length=255, blank=True)
     external_reference = models.CharField(
         max_length=100, blank=True, help_text="Payroll run, bank teller or receipt number."
+    )
+    channel = models.CharField(
+        max_length=10, choices=PaymentChannel.choices, blank=True, help_text="How the money came in, for money received (BR-38)."
     )
 
     status = models.CharField(

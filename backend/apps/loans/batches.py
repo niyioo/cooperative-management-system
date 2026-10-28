@@ -54,7 +54,7 @@ def _payroll_months(running, exclude_batch=None):
     entries = Transaction.objects.filter(
         loan__in=loan_ids,
         txn_type=TransactionType.LOAN_REPAYMENT,
-        batch__batch_type=BatchType.LOAN_REPAYMENTS,
+        batch__batch_type__in=[BatchType.LOAN_REPAYMENTS, BatchType.MONTHLY_SCHEDULE],
         status__in=[TransactionStatus.POSTED, TransactionStatus.PENDING],
         period__isnull=False,
     )

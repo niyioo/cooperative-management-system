@@ -71,8 +71,11 @@ class TestChoosingGuarantors:
         response = as_user(intruder.user).post(f"{ME}loan-applications/{draft.pk}/guarantors/", {"membership_number": friend.membership_number})
         assert response.status_code == 404
 
-    def test_products_always_need_a_guarantor(self, as_user, super_admin, product):
-        response = as_user(super_admin).patch(f"/api/v1/admin/loans/products/{product.pk}/", {"guarantors_required": 0})
+    def test_salary_recovered_products_may_need_no_guarantor(self, as_user, super_admin, product):
+        """BR-37: only the regular loan needs guarantors; loans open to non-members cannot ask for any."""
+        url = f"/api/v1/admin/loans/products/{product.pk}/"
+        assert as_user(super_admin).patch(url, {"guarantors_required": 0}).status_code == 200
+        response = as_user(super_admin).patch(url, {"guarantors_required": 2, "open_to_non_members": True})
         assert response.status_code == 400 and "guarantors_required" in response.data["error"]["fields"]
 
 

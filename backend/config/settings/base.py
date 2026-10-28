@@ -229,6 +229,7 @@ REST_FRAMEWORK = {
         "login_ip": "30/min",  # per IP, across identifiers
         "password_reset": "5/hour",
         "guarantor_lookup": "30/hour",  # membership-number lookups, per member
+        "membership_application": "5/hour",  # public join form, per IP
     },
     "NUM_PROXIES": NUM_PROXIES or None,
     "EXCEPTION_HANDLER": "apps.common.exceptions.api_exception_handler",

@@ -3,6 +3,7 @@ from django.db import models
 from django.db.models import Q
 from django.utils import timezone
 
+from apps.common.fields import MoneyField
 from apps.common.models import ReferenceMixin, TimeStampedModel
 from apps.common.uploads import member_document_path, member_import_path, member_photo_path
 from apps.common.validators import (
@@ -118,6 +119,37 @@ class Member(TimeStampedModel):
     closed_at = models.DateTimeField(null=True, blank=True)
 
     # Bank details for payouts
+    is_official = models.BooleanField(
+        default=False, help_text="One of the society's officials (chairman, secretary, treasurer); may borrow more (BR-37)."
+    )
+    monthly_net_pay = MoneyField(
+        null=True, blank=True, help_text="Monthly take-home pay, shown to officers deciding loans (BR-37)."
+    )
+    # From the paper membership form.
+    former_name = models.CharField("Former or maiden name", max_length=150, blank=True)
+    permanent_address = models.TextField(blank=True)
+    other_cooperatives = models.TextField(blank=True, help_text="Other cooperative societies the member belongs to, and where.")
+    other_debts = models.TextField(blank=True, help_text="Organisations the member currently owes, if any.")
+    referee_one = models.ForeignKey(
+        "self", on_delete=models.PROTECT, null=True, blank=True, related_name="+",
+        help_text="First referee: an EMDI staff member and society member, liable if the applicant defaults.",
+    )
+    referee_two = models.ForeignKey(
+        "self", on_delete=models.PROTECT, null=True, blank=True, related_name="+",
+        help_text="Second referee, on the same terms.",
+    )
+    application_date = models.DateField(null=True, blank=True, help_text="Date the membership form was submitted.")
+    # Online applications (BR-39): the Secretary recommends, then the Chairman approves.
+    applied_online = models.BooleanField(default=False)
+    recommendation = models.CharField(
+        max_length=20, blank=True, choices=[("RECOMMENDED", "Recommended"), ("NOT_RECOMMENDED", "Not recommended")]
+    )
+    recommendation_note = models.CharField(max_length=500, blank=True)
+    recommended_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    recommended_at = models.DateTimeField(null=True, blank=True)
+    membership_fee_paid = MoneyField(null=True, blank=True)
     bank_name = models.CharField(max_length=100, blank=True)
     bank_account_number = models.CharField(max_length=10, blank=True)
     bank_account_name = models.CharField(max_length=150, blank=True)

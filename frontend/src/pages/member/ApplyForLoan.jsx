@@ -12,6 +12,7 @@ import { CheckboxField, SelectField, TextAreaField, TextField } from '../../comp
 import PageHeader from '../../components/ui/PageHeader';
 import QueryState from '../../components/ui/QueryState';
 import { Spinner } from '../../components/ui/Spinner';
+import { GOODS_LOAN_TYPES } from '../../lib/choices';
 import { formatDate, formatNaira } from '../../lib/format';
 
 const STEPS = ['Choose a loan', 'Amount and term', 'Purpose and documents', 'Guarantors', 'Review and submit'];
@@ -200,7 +201,7 @@ function PurposeAndDocuments({ product, form, update, onBack, onNext }) {
       <CardBody className="space-y-5">
         <TextAreaField label="What is the loan for?" required value={form.purpose} onChange={(e) => update({ purpose: e.target.value })}
           hint="A short explanation helps the committee, e.g. “School fees for two children”." maxLength={2000} />
-        {product.loan_type === 'COMMODITY' && (
+        {GOODS_LOAN_TYPES.includes(product.loan_type) && (
           <TextAreaField label="Goods you are buying" required value={form.items_description || ''} maxLength={2000}
             onChange={(e) => update({ items_description: e.target.value })} hint="e.g. deep freezer, make and model. The supplier is paid directly." />
         )}
@@ -227,7 +228,7 @@ function PurposeAndDocuments({ product, form, update, onBack, onNext }) {
         </div>
         <div className="flex justify-between">
           <Button variant="secondary" icon={ArrowLeft} onClick={onBack}>Back</Button>
-          <Button icon={ArrowRight} disabled={form.purpose.trim().length < 3 || (product.loan_type === 'COMMODITY' && !(form.items_description || '').trim())} onClick={onNext}>Continue</Button>
+          <Button icon={ArrowRight} disabled={form.purpose.trim().length < 3 || (GOODS_LOAN_TYPES.includes(product.loan_type) && !(form.items_description || '').trim())} onClick={onNext}>Continue</Button>
         </div>
       </CardBody>
     </Card>

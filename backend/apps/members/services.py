@@ -50,6 +50,16 @@ PROFILE_FIELDS = [
     "bank_name",
     "bank_account_number",
     "bank_account_name",
+    "former_name",
+    "permanent_address",
+    "other_cooperatives",
+    "other_debts",
+    "referee_one",
+    "referee_two",
+    "application_date",
+    "membership_fee_paid",
+    "is_official",
+    "monthly_net_pay",
 ]
 
 INITIAL_STATUSES = {MemberStatus.PENDING, MemberStatus.ACTIVE, MemberStatus.INACTIVE}
@@ -262,6 +272,68 @@ def update_member(actor, member, **data):
     return member
 
 
+# ---------------------------------------------------------------------------
+# Online membership applications (BR-39)
+# ---------------------------------------------------------------------------
+
+RECOMMENDED, NOT_RECOMMENDED = "RECOMMENDED", "NOT_RECOMMENDED"
+
+
+def _officers_who_can(codename):
+    """Active officers holding a member permission, to tell them about a new application."""
+    from django.db.models import Q
+
+    return User.objects.filter(is_active=True).filter(
+        Q(is_superuser=True) | Q(groups__permissions__codename=codename, groups__permissions__content_type__app_label="members")
+    ).distinct()
+
+
+@transaction.atomic
+def apply_for_membership(*, profile, email="", next_of_kin=None):
+    """
+    A membership form filled in online by someone not yet a member. It arrives
+    as a PENDING member, numbered, with no portal access until approved.
+    """
+    from apps.notifications import services as notifications
+
+    member = create_member_record(
+        None, profile={**profile, "application_date": timezone.localdate()}, email=email,
+        status=MemberStatus.PENDING, next_of_kin=next_of_kin, reason="Applied online",
+    )
+    member.applied_online = True
+    member.save(update_fields=["applied_online", "updated_at"])
+    record("member.applied_online", obj=member, metadata={"membership_number": member.membership_number})
+    for officer in _officers_who_can("change_member"):
+        notifications.notify(
+            officer, category=notifications.Category.APPROVAL,
+            title=f"New membership application: {member.full_name}",
+            body=f"{member.full_name} applied to join online ({member.membership_number}). Check the details and referees, "
+                 "then recommend or not; the Chairman approves.",
+            link=f"/admin/members/{member.pk}",
+        )
+    return member
+
+
+@transaction.atomic
+def recommend_membership(actor, member, *, recommended, note=""):
+    """The Secretary's verdict on an application, as on the paper form's 'For official use' box."""
+    require_perm(actor, P.CHANGE_MEMBER)
+    member = Member.objects.select_for_update().get(pk=member.pk)
+    assert_not_self(actor, member, "recommend")
+    if member.status != MemberStatus.PENDING:
+        raise DomainError("Only a pending application can be recommended.", code="invalid_transition")
+    note = (note or "").strip()
+    if not recommended and not note:
+        _field_error("note", "Say why it is not recommended.", "reason_required")
+    member.recommendation = RECOMMENDED if recommended else NOT_RECOMMENDED
+    member.recommendation_note = note[:500]
+    member.recommended_by = actor
+    member.recommended_at = timezone.now()
+    member.save(update_fields=["recommendation", "recommendation_note", "recommended_by", "recommended_at", "updated_at"])
+    record("member.recommended", actor=actor, obj=member, metadata={"recommendation": member.recommendation, "note": note})
+    return member
+
+
 @transaction.atomic
 def change_member_status(actor, member, action, *, reason=""):
     require_perm(actor, P.CHANGE_MEMBER_STATUS)
@@ -278,10 +350,19 @@ def change_member_status(actor, member, action, *, reason=""):
     if reason_required and not reason:
         _field_error("reason", "Please give a reason.", "reason_required")
 
+    if action == "activate" and member.applied_online:
+        if member.recommendation != RECOMMENDED:
+            raise DomainError("The Secretary must recommend this application before it is approved.", code="not_recommended")
+        if member.recommended_by_id == actor.pk:
+            raise DomainError("You recommended this application, so another official must approve it.", code="maker_checker")
+
     old_status = member.status
     member.status = new_status
     member.status_reason = reason
     member.save(update_fields=["status", "status_reason", "updated_at"])
+    if action == "activate" and member.applied_online and member.user.has_real_email and not member.user.has_usable_password():
+        user = member.user
+        transaction.on_commit(lambda: send_activation_email(user))
     _log_status(member, old_status, new_status, reason, actor)
     record(
         "member.status_changed",

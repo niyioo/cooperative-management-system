@@ -84,7 +84,8 @@ function Overview({ m }) {
               ['Full name', m.full_name], ['Gender', label(GENDERS, m.gender)], ['Date of birth', formatDate(m.date_of_birth)],
               ['Marital status', label(MARITAL, m.marital_status)], ['Phone', m.phone], ['Alternative phone', m.alt_phone],
               ['Email', m.portal.has_email ? m.email : ''], ['State of origin', m.state_of_origin], ['LGA', m.lga],
-              ['Residential address', m.residential_address],
+              ['Current home address', m.residential_address], ['Permanent home address', m.permanent_address],
+              ['Former or maiden name', m.former_name],
             ]} />
           </CardBody>
         </Card>
@@ -95,7 +96,19 @@ function Overview({ m }) {
               ['Staff number', m.staff_number], ['IPPIS number', m.ippis_number], ['Department', m.department?.name],
               ['Unit', m.unit], ['Designation', m.designation], ['Grade level', m.grade_level],
               ['Employment date', formatDate(m.employment_date)], ['Employment status', label(EMPLOYMENT, m.employment_status)],
-              ['Date joined', formatDate(m.date_joined)],
+              ['Date joined', formatDate(m.date_joined)], ['Monthly net pay', m.monthly_net_pay && formatNaira(m.monthly_net_pay)],
+              ['Official', m.is_official ? 'Yes: may borrow more on the cooperative loan' : ''],
+            ]} />
+          </CardBody>
+        </Card>
+        <Card>
+          <CardHeader title="Membership form" />
+          <CardBody>
+            <DetailList columns={2} items={[
+              ['Referees', (m.referees || []).map((r) => `${r.full_name} (${r.membership_number})`).join(', ')],
+              ['Form submitted', formatDate(m.application_date)],
+              ['Membership fee paid', m.membership_fee_paid && formatNaira(m.membership_fee_paid)],
+              ['Other cooperatives', m.other_cooperatives], ['Organisations owed', m.other_debts],
             ]} />
           </CardBody>
         </Card>
@@ -376,6 +389,7 @@ export default function MemberDetail() {
                     <h1 className="text-2xl font-bold text-slate-900">{m.full_name}</h1>
                     <StatusBadge status={m.status} label={m.status_label} />
                     {m.membership_type === 'CHRISTMAS_SAVER' && <Badge tone="amber">Christmas saver · not a member</Badge>}
+                    {m.applied_online && m.status === 'PENDING' && <Badge tone="blue">Applied online</Badge>}
                   </div>
                   <p className="text-sm text-slate-500">{m.membership_number}{m.department ? ` · ${m.department.name}` : ''}</p>
                   {can(P.CHANGE_MEMBER) && <PhotoUpload member={m} />}
@@ -383,6 +397,16 @@ export default function MemberDetail() {
               </div>
               <div className="no-print flex flex-wrap gap-2">
                 {can(P.CHANGE_MEMBER) && m.status !== 'CLOSED' && <Link to={`/admin/members/${m.id}/edit`}><Button variant="secondary" icon={Pencil}>Edit</Button></Link>}
+                {can(P.CHANGE_MEMBER) && m.applied_online && m.status === 'PENDING' && (
+                  <>
+                    <ActionButton label="Recommend" input="optional" inputLabel="Note"
+                      description="Confirm you have checked the details and referees, and recommend this application to the Chairman for approval."
+                      action={(note) => adminApi.members.action(m.id, 'recommend', { recommended: true, note })} />
+                    <ActionButton label="Not recommended" variant="danger" input="required" inputLabel="Reason"
+                      description="Record that this application is not recommended, with the reason."
+                      action={(note) => adminApi.members.action(m.id, 'recommend', { recommended: false, note })} />
+                  </>
+                )}
                 {can(P.CHANGE_MEMBER_STATUS) && STATUS_ACTIONS[m.status].map(([action, text, needsReason]) => (
                   <ActionButton key={action} label={text} variant={needsReason ? 'danger' : 'primary'} input={needsReason ? 'required' : 'optional'}
                     description={`${text} ${m.full_name}'s membership. The change is recorded in the status history and audit log.`}
@@ -405,6 +429,15 @@ export default function MemberDetail() {
                 )}
               </div>
             </div>
+
+            {m.applied_online && m.status === 'PENDING' && (
+              <Alert tone={m.recommendation === 'NOT_RECOMMENDED' ? 'warning' : 'info'} className="mb-6"
+                title={m.recommendation ? `${m.recommendation === 'RECOMMENDED' ? 'Recommended' : 'Not recommended'} by ${m.recommended_by_name}` : 'Online application awaiting recommendation'}>
+                {m.recommendation
+                  ? <>{m.recommendation_note || 'No note.'} {m.recommendation === 'RECOMMENDED' && 'The Chairman (or another official) can now approve it with Activate.'}</>
+                  : <>Submitted {formatDate(m.application_date)}. The Secretary checks the details and referees, then recommends or not; the Chairman approves.</>}
+              </Alert>
+            )}
 
             {tempPassword && (
               <Alert tone="success" title="Temporary password created" className="mb-6">

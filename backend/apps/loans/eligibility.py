@@ -12,8 +12,9 @@ from apps.ledger.selectors import ZERO, net_by
 from apps.members.models import MemberStatus
 from apps.savings.models import SavingsAccount
 from apps.savings.rules import months_of_membership
-from apps.savings.statutory import statutory_account
+from apps.savings.statutory import positions, statutory_account
 
+from .calculators import end_month_deadline, longest_term_before, schedule_for_product
 from .models import Loan, LoanApplication
 
 OPEN_APPLICATION_STATUSES = [
@@ -60,11 +61,44 @@ def borrowing_limit(member):
     return (eligible_savings(member) * multiple).quantize(Decimal("0.01"))
 
 
+def savings_multiple(product, member):
+    """The savings multiple this member may borrow on this product: officials may have more (BR-37)."""
+    if member.is_official and product.official_savings_multiple:
+        return product.official_savings_multiple
+    return product.max_savings_multiple
+
+
+def running_loans(member, exclude_application=None):
+    """Loans held or granted: running, awaiting disbursement, or approved and not yet paid out (BR-37)."""
+    count = Loan.objects.filter(member=member, status__in=Loan.RUNNING_STATUSES + [Loan.Status.PENDING_DISBURSEMENT]).count()
+    approved = LoanApplication.objects.filter(member=member, status=LoanApplication.Status.APPROVED, loans__isnull=True)
+    if exclude_application is not None:
+        approved = approved.exclude(pk=exclude_application.pk)
+    return count + approved.count()
+
+
+def monthly_commitments(member):
+    """
+    What the member already pays each month: the next instalment of every running loan
+    plus their monthly savings contribution. Shown to officers against net pay (BR-37).
+    """
+    total = ZERO
+    for loan in Loan.objects.filter(member=member, status__in=Loan.RUNNING_STATUSES).prefetch_related("installments"):
+        upcoming = [i for i in loan.installments.all() if i.due_date >= timezone.localdate()]
+        instalment = (upcoming or list(loan.installments.all()))[:1]
+        total += sum((i.principal_due + i.interest_due for i in instalment), ZERO)
+    account = statutory_account(member)
+    if account is not None:
+        total += positions([account])[account.pk]["amount"]
+    return total
+
+
 def maximum_amount(product, member, exclude_application=None):
     """The most this member could borrow on this product right now."""
     ceiling = product.max_amount
-    if product.max_savings_multiple:
-        ceiling = min(ceiling, (eligible_savings(member) * product.max_savings_multiple).quantize(Decimal("0.01")))
+    multiple = savings_multiple(product, member)
+    if multiple:
+        ceiling = min(ceiling, (eligible_savings(member) * multiple).quantize(Decimal("0.01")))
     limit = borrowing_limit(member)
     if limit is not None:
         ceiling = min(ceiling, limit - current_borrowing(member, exclude_application=exclude_application))
@@ -84,10 +118,12 @@ def evaluate(member, product, *, amount=None, term_months=None, exclude_applicat
     today = timezone.localdate()
     savings = eligible_savings(member)
     max_amount = maximum_amount(product, member, exclude_application=exclude_application)
+    member_ok = member.is_full_member or product.open_to_non_members
     checks = [
         _check("product_active", "Loan product is available", product.is_active, "" if product.is_active else "This product is closed to new applications."),
-        _check("full_member", "Applicant is a member of the cooperative", member.is_full_member,
-               "" if member.is_full_member else "Christmas savers are not members and cannot borrow."),
+        _check("full_member", "Applicant is a member of the cooperative" if not product.open_to_non_members
+               else "Open to members and Christmas savers", member_ok,
+               "" if member_ok else "Christmas savers are not members and cannot borrow on this product."),
         _check("member_active", "Membership is active", member.status == MemberStatus.ACTIVE, f"Membership status: {member.get_status_display()}."),
     ]
 
@@ -112,6 +148,16 @@ def evaluate(member, product, *, amount=None, term_months=None, exclude_applicat
         f"{same_product} running.",
     ))
 
+    most = CooperativeSettings.load().max_running_loans
+    if most:
+        held = running_loans(member, exclude_application=exclude_application)
+        checks.append(_check(
+            "running_loan_limit",
+            f"At most {most} loans at once",
+            held < most,
+            f"{held} loan(s) held or approved.",
+        ))
+
     open_apps = LoanApplication.objects.filter(member=member, product=product, status__in=OPEN_APPLICATION_STATUSES)
     if exclude_application is not None:
         open_apps = open_apps.exclude(pk=exclude_application.pk)
@@ -130,11 +176,13 @@ def evaluate(member, product, *, amount=None, term_months=None, exclude_applicat
             f"Regular Savings ₦{savings:,.2f}; limit ₦{limit:,.2f}; already owed ₦{borrowed:,.2f}; "
             f"available ₦{max(limit - borrowed, ZERO):,.2f}.",
         ))
-    if product.max_savings_multiple:
-        product_limit = (savings * product.max_savings_multiple).quantize(Decimal("0.01"))
+    multiple = savings_multiple(product, member)
+    if multiple:
+        product_limit = (savings * multiple).quantize(Decimal("0.01"))
+        who = "officials" if member.is_official and product.official_savings_multiple else "members"
         checks.append(_check(
             "savings_security",
-            f"Loan within {product.max_savings_multiple.normalize()}× Regular Savings for this product",
+            f"Loan within {multiple.normalize()}× Regular Savings ({who})",
             amount is None or amount <= product_limit,
             f"Regular Savings ₦{savings:,.2f}; this product lends up to ₦{product_limit:,.2f}.",
         ))
@@ -153,6 +201,23 @@ def evaluate(member, product, *, amount=None, term_months=None, exclude_applicat
         label = (f"Term of {', '.join(map(str, allowed))} months" if allowed
                  else f"Term between {product.min_term_months} and {product.max_term_months} months")
         checks.append(_check("term", label, ok, f"Requested {term_months} months."))
+        if product.must_end_by_month:
+            deadline = end_month_deadline(today, product.must_end_by_month)
+            longest = longest_term_before(today, product.must_end_by_month)
+            checks.append(_check(
+                "end_month",
+                f"Repaid by {deadline:%B %Y}",
+                term_months <= longest,
+                f"Paid out now, at most {longest} monthly instalment(s) fit before {deadline:%d %B %Y}.",
+            ))
+    if amount is not None and term_months is not None and amount > 0 and term_months >= 1:
+        instalment = schedule_for_product(product, amount, term_months, today).monthly_payment
+        commitments = monthly_commitments(member)
+        pay = member.monthly_net_pay
+        detail = (f"New instalment ₦{instalment:,.2f}; already paying ₦{commitments:,.2f} a month; "
+                  + (f"net pay ₦{pay:,.2f}." if pay else "net pay not recorded."))
+        checks.append(_check("pay_covers", "Monthly pay covers the deductions (officers decide)",
+                             pay is None or instalment + commitments <= pay, detail, hard=False))
 
     return {
         "eligible": all(c["passed"] for c in checks if c["hard"]),

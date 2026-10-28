@@ -105,6 +105,8 @@ class StatusChangeSerializer(serializers.ModelSerializer):
 class MemberDetailSerializer(MemberListSerializer):
     next_of_kin = NextOfKinSerializer(many=True, read_only=True)
     status_history = serializers.SerializerMethodField()
+    referees = serializers.SerializerMethodField()
+    recommended_by_name = serializers.CharField(source="recommended_by.full_name", default=None, read_only=True)
     portal = serializers.SerializerMethodField()
     document_count = serializers.IntegerField(source="documents.count", read_only=True)
     created_by = serializers.CharField(source="created_by.full_name", default=None, read_only=True)
@@ -130,6 +132,20 @@ class MemberDetailSerializer(MemberListSerializer):
             "bank_name",
             "bank_account_number",
             "bank_account_name",
+            "former_name",
+            "permanent_address",
+            "other_cooperatives",
+            "other_debts",
+            "referees",
+            "application_date",
+            "applied_online",
+            "recommendation",
+            "recommendation_note",
+            "recommended_by_name",
+            "recommended_at",
+            "membership_fee_paid",
+            "is_official",
+            "monthly_net_pay",
             "next_of_kin",
             "status_history",
             "portal",
@@ -137,6 +153,12 @@ class MemberDetailSerializer(MemberListSerializer):
             "created_by",
             "created_at",
             "updated_at",
+        ]
+
+    def get_referees(self, obj) -> list[dict]:
+        return [
+            {"id": str(r.pk), "membership_number": r.membership_number, "full_name": r.full_name, "phone": r.phone}
+            for r in (obj.referee_one, obj.referee_two) if r is not None
         ]
 
     def get_status_history(self, obj) -> list[dict]:
@@ -166,6 +188,15 @@ class MemberProfileSerializer(serializers.ModelSerializer):
     )
     email = serializers.EmailField(required=False, allow_blank=True)
     membership_number = serializers.CharField(max_length=30, required=False, allow_blank=True)
+    # Referees are given by membership number, as on the paper form.
+    referee_one = serializers.SlugRelatedField(
+        slug_field="membership_number", queryset=Member.objects.filter(membership_type=MembershipType.MEMBER),
+        allow_null=True, required=False,
+    )
+    referee_two = serializers.SlugRelatedField(
+        slug_field="membership_number", queryset=Member.objects.filter(membership_type=MembershipType.MEMBER),
+        allow_null=True, required=False,
+    )
 
     class Meta:
         model = Member
@@ -196,6 +227,16 @@ class MemberProfileSerializer(serializers.ModelSerializer):
             "bank_name",
             "bank_account_number",
             "bank_account_name",
+            "former_name",
+            "permanent_address",
+            "other_cooperatives",
+            "other_debts",
+            "referee_one",
+            "referee_two",
+            "application_date",
+            "membership_fee_paid",
+            "is_official",
+            "monthly_net_pay",
         ]
         # Uniqueness is checked case-insensitively in the service layer.
         extra_kwargs = {
@@ -224,6 +265,15 @@ class MemberProfileSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Cannot be in the future.")
         return value
 
+    def validate(self, attrs):
+        one, two = attrs.get("referee_one"), attrs.get("referee_two")
+        if one and two and one == two:
+            raise serializers.ValidationError({"referee_two": "Choose two different referees."})
+        instance = getattr(self, "instance", None)
+        if instance is not None and instance in (one, two):
+            raise serializers.ValidationError({"referee_one": "A member cannot be their own referee."})
+        return attrs
+
     def validate_bank_account_number(self, value):
         if value and not re.fullmatch(r"\d{10}", value):
             raise serializers.ValidationError("Bank account numbers have exactly 10 digits.")
@@ -241,6 +291,48 @@ class MemberCreateSerializer(MemberProfileSerializer):
 
     class Meta(MemberProfileSerializer.Meta):
         fields = MemberProfileSerializer.Meta.fields + ["membership_type", "status", "send_activation", "next_of_kin"]
+
+
+class MembershipApplicationSerializer(MemberProfileSerializer):
+    """The paper membership form, filled in online by an applicant (BR-39)."""
+
+    referee_one = serializers.SlugRelatedField(
+        slug_field="membership_number",
+        queryset=Member.objects.filter(membership_type=MembershipType.MEMBER, status=MemberStatus.ACTIVE),
+        error_messages={"does_not_exist": "No active member has this membership number."},
+    )
+    referee_two = serializers.SlugRelatedField(
+        slug_field="membership_number",
+        queryset=Member.objects.filter(membership_type=MembershipType.MEMBER, status=MemberStatus.ACTIVE),
+        error_messages={"does_not_exist": "No active member has this membership number."},
+    )
+    next_of_kin = NextOfKinInputSerializer()
+    certify = serializers.BooleanField()
+    website = serializers.CharField(required=False, allow_blank=True)  # hidden from people; catches bots
+
+    class Meta(MemberProfileSerializer.Meta):
+        fields = [
+            "title", "first_name", "middle_name", "last_name", "former_name", "gender", "date_of_birth", "marital_status",
+            "email", "phone", "alt_phone", "residential_address", "permanent_address", "state_of_origin", "lga",
+            "staff_number", "department", "designation", "grade_level", "employment_date",
+            "bank_name", "bank_account_number", "bank_account_name", "other_cooperatives", "other_debts",
+            "referee_one", "referee_two", "next_of_kin", "certify", "website",
+        ]
+        extra_kwargs = {
+            **MemberProfileSerializer.Meta.extra_kwargs,
+            "phone": {"required": True}, "first_name": {"required": True}, "last_name": {"required": True},
+            "designation": {"required": True, "allow_blank": False},
+        }
+
+    def validate_certify(self, value):
+        if not value:
+            raise serializers.ValidationError("Confirm that the information given is true.")
+        return value
+
+
+class RecommendSerializer(serializers.Serializer):
+    recommended = serializers.BooleanField()
+    note = serializers.CharField(max_length=500, required=False, allow_blank=True, default="")
 
 
 class StatusActionSerializer(serializers.Serializer):

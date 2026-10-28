@@ -56,6 +56,10 @@ export default function Login() {
           Forgot your password?
         </Link>
       </p>
+      <p className="mt-3 border-t border-slate-100 pt-4 text-center text-sm text-slate-600">
+        Not a member yet?{' '}
+        <Link to="/join" className="font-medium text-brand-600 hover:underline">Apply to join</Link>
+      </p>
     </>
   );
 }

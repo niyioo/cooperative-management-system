@@ -46,6 +46,7 @@ def borrowing_check(result):
     return next(c for c in result["checks"] if c["code"] == "borrowing_limit")
 
 
+@pytest.mark.borrowing_limit
 class TestBorrowingLimit:
     def test_members_may_borrow_three_times_their_regular_savings(self, saver, open_product):
         result = evaluate(saver, open_product, amount=D("300000"), term_months=12)
@@ -94,5 +95,10 @@ class TestBorrowingLimit:
         assert result["max_amount"] == open_product.max_amount
         assert all(c["code"] != "borrowing_limit" for c in result["checks"])
 
-    def test_default_is_three(self):
+    def test_can_be_set_to_three(self):
         assert CooperativeSettings.load().loan_savings_multiple == D("3.00")
+
+
+def test_emdi_runs_without_a_society_wide_limit():
+    """BR-37: the savings multiple sits on the regular loan product; the society-wide limit is off."""
+    assert CooperativeSettings.load().loan_savings_multiple is None

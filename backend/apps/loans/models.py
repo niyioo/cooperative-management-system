@@ -8,6 +8,7 @@ debits (disbursement, interest, penalties) minus credits (repayments).
 """
 from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import F, Q
 
@@ -37,6 +38,13 @@ class LoanType(models.TextChoices):
     STANDARD = "STANDARD", "Cash loan"
     EMERGENCY = "EMERGENCY", "Emergency loan"
     COMMODITY = "COMMODITY", "Commodity loan (goods on credit)"
+    ELECTRONICS = "ELECTRONICS", "Electronics loan (goods on credit)"
+    CHRISTMAS = "CHRISTMAS", "Christmas loan"
+
+    @classmethod
+    def for_goods(cls):
+        """Loans that buy goods from a supplier instead of paying the member cash."""
+        return (cls.COMMODITY, cls.ELECTRONICS)
 
 
 class LoanProduct(TimeStampedModel):
@@ -77,13 +85,29 @@ class LoanProduct(TimeStampedModel):
         default=1, help_text="Active loans of this product a member may hold at once."
     )
     guarantors_required = models.PositiveSmallIntegerField(
-        default=1, help_text="Guarantors (fellow members) each application needs. At least one (BR-28)."
+        default=1, help_text="Guarantors (fellow members) each application needs; 0 for loans recovered from salary (BR-37)."
+    )
+    official_savings_multiple = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="For the society's officials, the savings multiple used instead of max_savings_multiple (BR-37).",
+    )
+    must_end_by_month = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(12)],
+        help_text="The loan must be fully repaid by the end of this month (e.g. 10 = October) of the year (BR-37).",
+    )
+    open_to_non_members = models.BooleanField(
+        default=False, help_text="Christmas savers who are not members may borrow on this product (BR-37)."
     )
     required_documents = ArrayField(
         models.CharField(max_length=150), default=list, blank=True
     )
     loan_type = models.CharField(
-        max_length=10,
+        max_length=12,
         choices=LoanType.choices,
         default=LoanType.STANDARD,
         help_text="Commodity loans pay a supplier for goods instead of paying cash to the member.",
@@ -107,7 +131,14 @@ class LoanProduct(TimeStampedModel):
                 condition=Q(max_savings_multiple__isnull=True) | Q(max_savings_multiple__gt=0),
                 name="loan_product_savings_multiple_positive",
             ),
-            models.CheckConstraint(condition=Q(guarantors_required__gte=1), name="loan_product_needs_a_guarantor"),
+            models.CheckConstraint(
+                condition=Q(official_savings_multiple__isnull=True) | Q(official_savings_multiple__gt=0),
+                name="loan_product_official_multiple_positive",
+            ),
+            models.CheckConstraint(
+                condition=Q(must_end_by_month__isnull=True) | Q(must_end_by_month__range=(1, 12)),
+                name="loan_product_end_month_range",
+            ),
             # "Flat for the whole term" has no meaning for a reducing-balance schedule.
             models.CheckConstraint(
                 condition=~Q(interest_method="REDUCING_BALANCE", interest_rate_basis="PER_LOAN"),

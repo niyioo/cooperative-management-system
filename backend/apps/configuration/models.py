@@ -81,6 +81,9 @@ class CooperativeSettings(models.Model):
             "of their Regular Savings, built from the monthly contributions. Blank means no limit."
         ),
     )
+    max_running_loans = models.PositiveSmallIntegerField(
+        default=0, help_text="Loans a member may hold at once across all products; 0 = no limit (BR-37)."
+    )
     guarantor_savings_multiple = models.DecimalField(
         max_digits=5,
         decimal_places=2,

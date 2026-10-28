@@ -24,6 +24,15 @@ class TransactionType(models.TextChoices):
     REVERSAL = "REVERSAL", "Reversal"
 
 
+class PaymentChannel(models.TextChoices):
+    """How money reached the society (BR-38)."""
+
+    PAYROLL = "PAYROLL", "Salary deduction"
+    TRANSFER = "TRANSFER", "Paid by hand (transfer)"
+    PAYROLL_AND_TRANSFER = "MIXED", "Salary deduction and transfer"
+    CASH = "CASH", "Cash"
+
+
 class EntrySide(models.TextChoices):
     """
     Side from the account's point of view.
@@ -106,6 +115,7 @@ class BatchType(models.TextChoices):
     DIVIDEND_PAYMENTS = "DIVIDEND_PAYMENTS", "Dividend payments"
     CYCLE_PAYOUTS = "CYCLE_PAYOUTS", "Savings cycle payouts"
     CLOSURE_SETTLEMENT = "CLOSURE_SETTLEMENT", "Account closure settlement"
+    MONTHLY_SCHEDULE = "MONTHLY_SCHEDULE", "Monthly deductions and payments"
     LOAN_RECOVERY = "LOAN_RECOVERY", "Loan recovered from savings"
 
 

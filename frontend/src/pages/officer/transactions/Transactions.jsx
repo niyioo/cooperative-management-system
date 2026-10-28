@@ -166,7 +166,7 @@ function UploadBatchButton() {
   const template = useMutation({ mutationFn: (type) => adminApi.batches.template(type).then((res) => saveBlob(res, `${type.toLowerCase()}-template.xlsx`)) });
   return (
     <FormModal trigger="Upload batch" triggerIcon={Upload} title="Upload a batch" submitLabel="Upload and check"
-      defaultValues={{ batch_type: 'CONTRIBUTIONS', product: '', period: currentPeriod(), balance_date: '', description: '', file: null }}
+      defaultValues={{ batch_type: 'MONTHLY_SCHEDULE', product: '', period: currentPeriod(), balance_date: '', description: '', file: null }}
       transform={(v) => ({ ...v, file: v.file?.[0], balance_date: v.balance_date || '' })}
       onSubmit={adminApi.batches.upload}
       onDone={(batch) => navigate(`/admin/transactions/batches/${batch.id}`)}
@@ -190,7 +190,15 @@ function UploadBatchButton() {
               <TextField label="Balance date" type="date" max={today()} {...register('balance_date')} error={errors.balance_date?.message}
                 hint="Date of the balances brought forward, e.g. 31 Dec 2025. Rows can give their own." />
             ) : (
-              <TextField label="Default month" type="month" {...register('period')} error={errors.period?.message} />
+              <TextField label={type === 'MONTHLY_SCHEDULE' ? 'Month this sheet is for' : 'Default month'} type="month"
+                {...register('period', type === 'MONTHLY_SCHEDULE' ? { required: 'Choose the month.' } : {})} error={errors.period?.message} />
+            )}
+            {type === 'MONTHLY_SCHEDULE' && (
+              <p className="rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-800">
+                Upload the society's monthly spreadsheet as it is: CTSS EMDI (salary deductions), Transfer to acct (paid by hand),
+                Refund, and the savings and loan columns. Names can be in any order. If any row has a problem, nothing is posted
+                and the report shows what to fix.
+              </p>
             )}
             <TextField label="Description" {...register('description')} error={errors.description?.message} hint="e.g. March payroll deductions" />
             <TextField label="File" type="file" accept=".xlsx,.csv" required {...register('file', { required: 'Choose a file.' })} error={errors.file?.message} />

@@ -63,6 +63,23 @@ def month_end_after(start, months):
     return date(year, month, calendar.monthrange(year, month)[1])
 
 
+def end_month_deadline(start, end_month):
+    """
+    The last day a loan paid out on `start` may run to when it must end by `end_month`
+    (BR-37): the end of that month in the first year it falls on or after the first instalment.
+    """
+    first_due = month_end_after(start, 1)
+    year = first_due.year if first_due.month <= end_month else first_due.year + 1
+    return date(year, end_month, calendar.monthrange(year, end_month)[1])
+
+
+def longest_term_before(start, end_month):
+    """How many monthly instalments fit between `start` and the end-month deadline."""
+    deadline = end_month_deadline(start, end_month)
+    first_due = month_end_after(start, 1)
+    return (deadline.year - first_due.year) * 12 + deadline.month - first_due.month + 1
+
+
 def monthly_rate(rate, basis):
     """Periodic (monthly) rate as a fraction, for reducing-balance schedules."""
     rate = Decimal(rate) / 100

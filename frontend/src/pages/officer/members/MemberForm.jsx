@@ -14,13 +14,16 @@ import { EMPLOYMENT, GENDERS, MARITAL, MEMBERSHIP_TYPE, TITLES, options } from '
 import { applyFieldErrors } from '../../../lib/errors';
 
 // Optional fields the API stores as NULL rather than an empty string.
-const NULLABLE = ['date_of_birth', 'employment_date', 'staff_number', 'ippis_number', 'department'];
+const NULLABLE = ['date_of_birth', 'employment_date', 'staff_number', 'ippis_number', 'department', 'referee_one', 'referee_two',
+  'application_date', 'membership_fee_paid', 'monthly_net_pay'];
 
 const EMPTY = {
   membership_number: '', email: '', title: '', first_name: '', middle_name: '', last_name: '', gender: '', date_of_birth: '', marital_status: '',
   phone: '', alt_phone: '', residential_address: '', state_of_origin: '', lga: '',
   staff_number: '', ippis_number: '', department: '', unit: '', designation: '', grade_level: '', employment_date: '', employment_status: 'ACTIVE',
   date_joined: '', bank_name: '', bank_account_number: '', bank_account_name: '',
+  former_name: '', permanent_address: '', other_cooperatives: '', other_debts: '', referee_one: '', referee_two: '',
+  application_date: '', membership_fee_paid: '', is_official: false, monthly_net_pay: '',
   membership_type: 'MEMBER', status: 'ACTIVE', send_activation: true,
   kin_full_name: '', kin_relationship: '', kin_phone: '', kin_email: '', kin_address: '',
 };
@@ -32,6 +35,8 @@ function fromMember(m) {
   });
   values.department = m.department?.id || '';
   values.email = m.portal?.has_email ? m.email : '';
+  values.referee_one = m.referees?.[0]?.membership_number || '';
+  values.referee_two = m.referees?.[1]?.membership_number || '';
   return values;
 }
 
@@ -101,6 +106,7 @@ function MemberFormBody({ member }) {
         <SelectField label="Marital status" {...register('marital_status')} error={err('marital_status')}><option value="">—</option>{options(MARITAL)}</SelectField>
         <TextField label="State of origin" {...register('state_of_origin')} error={err('state_of_origin')} />
         <TextField label="LGA" {...register('lga')} error={err('lga')} />
+        <TextField label="Former or maiden name" {...register('former_name')} error={err('former_name')} />
       </Section>
 
       <Section title="Contact">
@@ -108,7 +114,10 @@ function MemberFormBody({ member }) {
         <TextField label="Alternative phone" type="tel" {...register('alt_phone')} error={err('alt_phone')} />
         <TextField label="Email" type="email" {...register('email')} error={err('email')} hint="Needed for portal access by email." />
         <div className="sm:col-span-2 lg:col-span-3">
-          <TextAreaField label="Residential address" rows={2} {...register('residential_address')} error={err('residential_address')} />
+          <TextAreaField label="Current home address" rows={2} {...register('residential_address')} error={err('residential_address')} />
+        </div>
+        <div className="sm:col-span-2 lg:col-span-3">
+          <TextAreaField label="Permanent home address" rows={2} {...register('permanent_address')} error={err('permanent_address')} />
         </div>
       </Section>
 
@@ -124,6 +133,25 @@ function MemberFormBody({ member }) {
         <TextField label="Grade level" {...register('grade_level')} error={err('grade_level')} />
         <TextField label="Employment date" type="date" {...register('employment_date')} error={err('employment_date')} />
         <SelectField label="Employment status" {...register('employment_status')} error={err('employment_status')}>{options(EMPLOYMENT)}</SelectField>
+        <TextField label="Monthly net pay (₦)" inputMode="decimal" {...register('monthly_net_pay')} error={err('monthly_net_pay')}
+          hint="Shown to the secretary and chairman when deciding loans." />
+      </Section>
+
+      <Section title="Membership form" description="From the paper membership form.">
+        <TextField label="Referee 1 (membership no.)" {...register('referee_one')} error={err('referee_one')} hint="EMDI staff, CR 07 or above, and a member" />
+        <TextField label="Referee 2 (membership no.)" {...register('referee_two')} error={err('referee_two')} hint="Liable if the applicant defaults" />
+        <TextField label="Date form submitted" type="date" {...register('application_date')} error={err('application_date')} />
+        <TextField label="Membership fee paid (₦)" inputMode="decimal" {...register('membership_fee_paid')} error={err('membership_fee_paid')} />
+        <div className="sm:col-span-2 lg:col-span-3">
+          <TextAreaField label="Other cooperative societies and their location" rows={2} {...register('other_cooperatives')} error={err('other_cooperatives')} />
+        </div>
+        <div className="sm:col-span-2 lg:col-span-3">
+          <TextAreaField label="Organisations currently owed (if any)" rows={2} {...register('other_debts')} error={err('other_debts')} />
+        </div>
+        {!isSaver && (
+          <CheckboxField label="An official of the society (chairman, secretary or treasurer): may borrow more on the cooperative loan"
+            {...register('is_official')} />
+        )}
       </Section>
 
       <Section title="Membership & bank">

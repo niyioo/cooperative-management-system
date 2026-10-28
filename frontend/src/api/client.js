@@ -68,6 +68,12 @@ api.interceptors.response.use(
   },
 );
 
+/** Open to anyone: the online membership form (BR-39). */
+export const publicApi = {
+  departments: () => api.get('/public/departments/').then((r) => r.data),
+  apply: (data) => api.post('/public/membership-applications/', data).then((r) => r.data),
+};
+
 export const authApi = {
   login: (identifier, password) => api.post('/auth/login/', { identifier, password }).then((r) => r.data),
   logout: () => api.post('/auth/logout/', null, { headers: XHR }),

@@ -15,6 +15,7 @@ class TransactionSerializer(serializers.ModelSerializer):
 
     type_label = serializers.SerializerMethodField()
     status_label = serializers.CharField(source="get_status_display", read_only=True)
+    channel_label = serializers.CharField(source="get_channel_display", read_only=True)
     signed_amount = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     account = serializers.SerializerMethodField()
 
@@ -32,6 +33,8 @@ class TransactionSerializer(serializers.ModelSerializer):
             "signed_amount",
             "description",
             "external_reference",
+            "channel",
+            "channel_label",
             "account",
             "status",
             "status_label",

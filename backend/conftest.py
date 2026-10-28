@@ -7,16 +7,17 @@ from tests.factories import DEFAULT_PASSWORD, MemberFactory, UserFactory, make_o
 @pytest.fixture(autouse=True)
 def _no_guarantee_limit(request, db):
     """
-    Most tests use brand-new members, with no savings, as guarantors. The
-    guarantee limit (BR-31) is switched off for them; tests that cover it
-    are marked @pytest.mark.guarantee_limit and keep the 2x default.
+    EMDI runs without a guarantee limit (BR-31) or a society-wide borrowing limit
+    (BR-32); both are optional settings. Tests that cover them are marked
+    @pytest.mark.guarantee_limit (2x) or @pytest.mark.borrowing_limit (3x).
     """
-    if request.node.get_closest_marker("guarantee_limit"):
-        return
     from apps.configuration.models import CooperativeSettings
 
     CooperativeSettings.load()
-    CooperativeSettings.objects.update(guarantor_savings_multiple=None)
+    CooperativeSettings.objects.update(
+        guarantor_savings_multiple=2 if request.node.get_closest_marker("guarantee_limit") else None,
+        loan_savings_multiple=3 if request.node.get_closest_marker("borrowing_limit") else None,
+    )
 
 
 @pytest.fixture

@@ -202,7 +202,11 @@ class TestFinancialViews:
         assert savings["total"] == "7000.00"
 
     def test_sections_follow_the_viewers_permissions(self, as_user, secretary, treasurer, member):
-        assert as_user(secretary).get(member_url(member, "financial-summary/")).data == {}
+        # BR-37: the secretary collates loan applications, so sees savings and loans but not investments or dividends.
+        assert set(as_user(secretary).get(member_url(member, "financial-summary/")).data) - {"monthly_contribution"} == {
+            "savings",
+            "loans",
+        }
         assert set(as_user(treasurer).get(member_url(member, "financial-summary/")).data) == {
             "savings",
             "loans",

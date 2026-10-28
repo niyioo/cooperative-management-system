@@ -40,4 +40,6 @@ urlpatterns = [
     path("me/", include((member_patterns, "me"))),
     # Namespace "officer" avoids clashing with the Django admin's "admin" namespace.
     path("admin/", include((admin_patterns, "officer"))),
+    # Open to anyone: the online membership form (BR-39).
+    path("public/", include(("apps.members.urls.public", "public"))),
 ]

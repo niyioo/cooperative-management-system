@@ -171,5 +171,7 @@ def test_dashboard_sections_follow_permissions(as_user, leaver, secretary, treas
     assert len(full["trends"]) == 12 and "savings_contributions" in full["trends"][0]
 
     limited = as_user(secretary).get("/api/v1/admin/dashboard/").data
-    assert "members" in limited and "savings" not in limited and "loans" not in limited
+    # BR-37: the secretary collates loans, so sees savings and loans, but not investments or dividends.
+    assert "members" in limited and "savings" in limited and "loans" in limited
+    assert "investments" not in limited and "dividends" not in limited
     assert "closure_requests" in limited["approvals"]

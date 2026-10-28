@@ -21,7 +21,7 @@ import { SelectField, TextAreaField, TextField } from '../../../components/ui/Fi
 import PageHeader from '../../../components/ui/PageHeader';
 import QueryState from '../../../components/ui/QueryState';
 import { Money } from '../../../components/ui/Table';
-import { APPLICATION_STATUS, today } from '../../../lib/choices';
+import { APPLICATION_STATUS, GOODS_LOAN_TYPES, today } from '../../../lib/choices';
 import { saveBlob } from '../../../lib/download';
 import { formatDate, formatDateTime, formatNaira } from '../../../lib/format';
 import { P, useCan } from '../../../lib/permissions';
@@ -67,7 +67,7 @@ function NewApplicationButton() {
             <TextField label="Term (months)" required type="number" {...register('term_months', { required: 'Required.' })} error={errors.term_months?.message} />
           </div>
           <TextAreaField label="Purpose" required rows={2} {...register('purpose', { required: 'Required.' })} error={errors.purpose?.message} />
-          {(products.data || []).find((p) => p.id === watch('product'))?.loan_type === 'COMMODITY' && (
+          {GOODS_LOAN_TYPES.includes((products.data || []).find((p) => p.id === watch('product'))?.loan_type) && (
             <TextAreaField label="Goods being bought" required rows={2} {...register('items_description', { required: 'Describe the goods.' })}
               error={errors.items_description?.message} hint="e.g. deep freezer, make and model" />
           )}
@@ -194,7 +194,7 @@ export function LoanApplicationDetail() {
                         <TextField label="Disbursement date" type="date" max={today()} {...register('disbursed_on')} error={errors.disbursed_on?.message} />
                         {a.items_description && (
                           <TextField label="Supplier" required {...register('supplier', { required: 'Name the supplier.' })} error={errors.supplier?.message}
-                            hint={`Commodity loan: the supplier is paid for ${a.items_description}.`} />
+                            hint={`Goods on credit: the supplier is paid for ${a.items_description}.`} />
                         )}
                         <TextField label="Payment reference" {...register('external_reference')} error={errors.external_reference?.message} hint="Bank transfer or cheque number" />
                       </>

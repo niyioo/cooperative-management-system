@@ -15,7 +15,7 @@ import { CheckboxField, SelectField, TextField } from '../../../components/ui/Fi
 import QueryState from '../../../components/ui/QueryState';
 import StatCard from '../../../components/ui/StatCard';
 import { Money, Table, Td, Th } from '../../../components/ui/Table';
-import { INTEREST_COLLECTION, INTEREST_METHOD, LOAN_STATUS, LOAN_TYPES, RATE_BASIS, currentPeriod, label, options, today } from '../../../lib/choices';
+import { INTEREST_COLLECTION, INTEREST_METHOD, LOAN_STATUS, LOAN_TYPES, MONTHS, RATE_BASIS, currentPeriod, label, options, today } from '../../../lib/choices';
 import { formatDate, formatNaira } from '../../../lib/format';
 import { P, useCan } from '../../../lib/permissions';
 
@@ -221,11 +221,12 @@ const PRODUCT_DEFAULTS = {
   name: '', code: '', description: '', loan_type: 'STANDARD', interest_rate: '', interest_rate_basis: 'PER_ANNUM', interest_method: 'FLAT', interest_collection: 'AMORTISED',
   min_amount: '0', max_amount: '', max_savings_multiple: '', min_term_months: 1, max_term_months: 12, allowed_terms: '',
   min_membership_months: 0, max_active_loans: 1, guarantors_required: 1, required_documents: '', allow_topup: false, is_active: true,
+  official_savings_multiple: '', must_end_by_month: '', open_to_non_members: false,
 };
 
 function ProductForm({ product }) {
   const initial = product
-    ? { ...PRODUCT_DEFAULTS, ...product, max_savings_multiple: product.max_savings_multiple || '', allowed_terms: product.allowed_terms.join(', '), required_documents: product.required_documents.join('\n') }
+    ? { ...PRODUCT_DEFAULTS, ...product, max_savings_multiple: product.max_savings_multiple || '', official_savings_multiple: product.official_savings_multiple || '', must_end_by_month: product.must_end_by_month || '', allowed_terms: product.allowed_terms.join(', '), required_documents: product.required_documents.join('\n') }
     : PRODUCT_DEFAULTS;
   return (
     <FormModal
@@ -235,6 +236,8 @@ function ProductForm({ product }) {
         const { id, ...data } = v;
         ['min_term_months', 'max_term_months', 'min_membership_months', 'max_active_loans', 'guarantors_required'].forEach((k) => { data[k] = Number(data[k]); });
         data.max_savings_multiple = data.max_savings_multiple || null;
+        data.official_savings_multiple = data.official_savings_multiple || null;
+        data.must_end_by_month = data.must_end_by_month ? Number(data.must_end_by_month) : null;
         data.allowed_terms = String(data.allowed_terms).split(',').map((t) => t.trim()).filter(Boolean).map(Number);
         data.required_documents = String(data.required_documents).split('\n').map((t) => t.trim()).filter(Boolean);
         return data;
@@ -247,7 +250,7 @@ function ProductForm({ product }) {
             <TextField label="Code" required {...register('code', { required: 'Required.' })} error={errors.code?.message} />
           </div>
           <TextField label="Description" {...register('description')} error={errors.description?.message} />
-          <SelectField label="Type" {...register('loan_type')} hint="Commodity loans pay a supplier for goods instead of paying the member cash.">{options(LOAN_TYPES)}</SelectField>
+          <SelectField label="Type" {...register('loan_type')} hint="Commodity and electronics loans pay a supplier for goods instead of paying the member cash.">{options(LOAN_TYPES)}</SelectField>
           <div className="grid gap-4 sm:grid-cols-2">
             <TextField label="Interest rate (%)" required inputMode="decimal" {...register('interest_rate', { required: 'Required.' })} error={errors.interest_rate?.message} />
             <SelectField label="Rate applies" {...register('interest_rate_basis')}>{options(RATE_BASIS)}</SelectField>
@@ -255,18 +258,24 @@ function ProductForm({ product }) {
             <SelectField label="Interest collected" {...register('interest_collection')}>{options(INTEREST_COLLECTION)}</SelectField>
             <TextField label="Minimum amount (₦)" inputMode="decimal" {...register('min_amount')} error={errors.min_amount?.message} />
             <TextField label="Maximum amount (₦)" required inputMode="decimal" {...register('max_amount', { required: 'Required.' })} error={errors.max_amount?.message} />
-            <TextField label="Max multiple of savings" inputMode="decimal" {...register('max_savings_multiple')} error={errors.max_savings_multiple?.message} hint="e.g. 2 = twice eligible savings; blank for no limit" />
+            <TextField label="Max multiple of savings" inputMode="decimal" {...register('max_savings_multiple')} error={errors.max_savings_multiple?.message} hint="e.g. 3 = three times Regular Savings; blank for no limit" />
+            <TextField label="Multiple for officials" inputMode="decimal" {...register('official_savings_multiple')} error={errors.official_savings_multiple?.message} hint="e.g. 4 for the chairman, secretary and treasurer; blank = same as members" />
+            <SelectField label="Must be repaid by" {...register('must_end_by_month')} error={errors.must_end_by_month?.message} hint="The loan must end by this month of the year">
+              <option value="">No deadline</option>
+              {MONTHS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </SelectField>
             <TextField label="Allowed terms (months)" {...register('allowed_terms')} error={errors.allowed_terms?.message} hint="Comma-separated, e.g. 6, 12, 18; blank for any" />
             <TextField label="Minimum term (months)" type="number" {...register('min_term_months')} error={errors.min_term_months?.message} />
             <TextField label="Maximum term (months)" type="number" {...register('max_term_months')} error={errors.max_term_months?.message} />
             <TextField label="Minimum membership (months)" type="number" {...register('min_membership_months')} error={errors.min_membership_months?.message} />
             <TextField label="Max running loans of this product" type="number" {...register('max_active_loans')} error={errors.max_active_loans?.message} />
-            <TextField label="Guarantors required" type="number" min={1} hint="At least one" {...register('guarantors_required', { min: { value: 1, message: 'Every loan needs at least one guarantor.' } })} error={errors.guarantors_required?.message} />
+            <TextField label="Guarantors required" type="number" min={0} hint="0 for loans recovered from salary" {...register('guarantors_required', { min: { value: 0, message: 'Cannot be negative.' } })} error={errors.guarantors_required?.message} />
           </div>
           <label className="block text-sm font-medium text-slate-700">
             Required documents <span className="font-normal text-slate-500">(one per line)</span>
             <textarea rows={3} {...register('required_documents')} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
           </label>
+          <CheckboxField label="Christmas savers (non-members) may borrow" {...register('open_to_non_members')} />
           <CheckboxField label="Allow top-up of a running loan" {...register('allow_topup')} />
           <CheckboxField label="Active (open to applications)" {...register('is_active')} />
         </div>

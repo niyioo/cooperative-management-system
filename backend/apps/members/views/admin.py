@@ -34,6 +34,7 @@ from ..serializers import (
     MemberProfileSerializer,
     NextOfKinSerializer,
     PhotoSerializer,
+    RecommendSerializer,
     StatusActionSerializer,
 )
 
@@ -116,6 +117,7 @@ class MemberViewSet(OfficerAPIMixin, mixins.ListModelMixin, mixins.RetrieveModel
         "send_activation": (P.CHANGE_MEMBER,),
         "temporary_password": (P.CHANGE_MEMBER,),
         "convert_to_member": (P.ADD_MEMBER, P.CHANGE_MEMBER),
+        "recommend": (P.CHANGE_MEMBER,),
     }
 
     def get_queryset(self):
@@ -272,6 +274,15 @@ class MemberViewSet(OfficerAPIMixin, mixins.ListModelMixin, mixins.RetrieveModel
         serializer = StatusActionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         member = services.convert_to_member(request.user, self.get_object(), **serializer.validated_data)
+        return Response(MemberDetailSerializer(member).data)
+
+    @extend_schema(request=RecommendSerializer, responses={200: MemberDetailSerializer},
+                   summary="The Secretary's recommendation on an online membership application (BR-39)")
+    @action(detail=True, methods=["post"])
+    def recommend(self, request, pk=None):
+        serializer = RecommendSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        member = services.recommend_membership(request.user, self.get_object(), **serializer.validated_data)
         return Response(MemberDetailSerializer(member).data)
 
     # -- portal account -----------------------------------------------------
