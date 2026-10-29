@@ -1,7 +1,9 @@
 // Brand constants. Colours are sampled from EMDI's official logo (emdi.gov.ng).
 export const BRAND = {
     name: 'EMDI Cooperative Multipurpose Society Ltd',
-    shortName: 'EMDI Coop',
+    shortName: 'EMDI CMS Ltd',
+    registrationNumber: '9369',
+    address: 'EMDI, KM 4, Ondo Road, Akure, Ondo State',
     institute: 'Engineering Materials Development Institute',
     parent: 'NASENI',
     location: 'Akure',

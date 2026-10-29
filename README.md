@@ -124,7 +124,7 @@ Sign in with that account, then add the other officers under **Settings › Offi
 ## Running the tests
 
 ```bash
-cd backend && pytest                      # 991 tests, including the access-control sweep
+cd backend && pytest                      # 996 tests, including the access-control sweep
 cd backend && pytest --cov=apps           # with coverage (currently 95%)
 cd frontend && npm test                   # Vitest unit tests
 cd frontend && npm run lint               # ESLint, zero warnings allowed
@@ -145,4 +145,4 @@ The backend tests need PostgreSQL (the schema uses PostgreSQL triggers and const
 - **Every financial operation is auditable**: posted ledger entries are immutable (corrections are reversals), approvals need a second officer, and every action is in the audit log.
 - **Members see only their own data**, and officers act only within their role's permissions.
 
-The full list (BR-01 to BR-39), with where each rule is enforced, is in [docs/ARCHITECTURE.md §10](docs/ARCHITECTURE.md#10-business-rules).
+The full list (BR-01 to BR-40), with where each rule is enforced, is in [docs/ARCHITECTURE.md §10](docs/ARCHITECTURE.md#10-business-rules).

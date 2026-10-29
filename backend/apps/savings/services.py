@@ -412,7 +412,7 @@ def _assert_security_kept(account, amount):
 
 @transaction.atomic
 def post_withdrawal(actor, *, account, amount, reason, value_date=None):
-    """Officer-only, and only for products configured to allow it. Off for every EMDI product."""
+    """Officer-only, for products that allow it: Christmas Savings while its cycle is open (BR-40), Pre-retirement Savings."""
     require_perm(actor, P.POST_SAVINGS_WITHDRAWAL)
     account = ledger.lock_account(account)
     assert_not_self(actor, account.member, "post withdrawals from")
@@ -420,6 +420,10 @@ def post_withdrawal(actor, *, account, amount, reason, value_date=None):
         raise DomainError(f"Withdrawals are not permitted from {account.product.name}.", code="withdrawal_not_allowed")
     if account.status != SavingsAccount.Status.ACTIVE:
         raise DomainError(f"The account is {account.get_status_display().lower()}.", code="account_not_active")
+    if account.cycle_id and account.cycle.status != SavingsCycle.Status.OPEN:
+        # Christmas Savings: members and non-members may withdraw any time while the cycle is open (BR-40).
+        raise DomainError(f"Withdrawals from {account.cycle} can only be made while it is open "
+                          f"({account.cycle.start_date:%B}–{account.cycle.end_date:%B}).", code="cycle_not_open")
     if not (reason or "").strip():
         _field_error("reason", "Please give a reason.", "reason_required")
     ledger.assert_sufficient_balance(account, amount)

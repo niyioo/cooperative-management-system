@@ -141,3 +141,13 @@ def test_goods_loans_need_the_goods_described(commodity):
     with pytest.raises(DomainError) as error:
         services.submit_application(secretary, application)
     assert error.value.code == "items_required"
+
+
+def test_officers_file_christmas_loans_for_christmas_savers(christmas):
+    secretary, chairman = make_officer("Cooperative Secretary"), make_officer("Cooperative Chairman")
+    saver = MemberFactory(membership_type=Member.Type.CHRISTMAS_SAVER, membership_number="XMAS/12")
+    application = services.create_application(secretary, member=saver, product=christmas, amount_requested=D("100000"),
+                                              term_months=1, purpose="Christmas")
+    services.submit_application(secretary, application)
+    services.start_review(secretary, application)
+    assert services.approve_application(chairman, application).status == "APPROVED"

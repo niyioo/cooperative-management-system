@@ -108,3 +108,19 @@ def test_problems_are_reported_row_by_row(as_user, treasurer, people, month):
 def test_a_row_with_nothing_paid_is_skipped(as_user, treasurer, people, month):
     batch = upload(as_user, treasurer, [row(1, "IGE BOLA", ctss=0), row(2, "IGE BOLA", ctss=5000, coop=5000, total=5000)], month)
     assert batch["status"] == "VALIDATED" and batch["line_count"] == 1
+
+
+def test_withdrawals_from_christmas_savings_are_paid_out(as_user, treasurer, people, month, open_cycle):
+    from apps.savings.models import SavingsAccount
+
+    account = SavingsAccount.objects.get(member=people["bola"], cycle=open_cycle)
+    Transaction.objects.create(member=people["bola"], txn_type="SAVINGS_CONTRIBUTION", entry_side="CREDIT", amount=D("50000"),
+                               savings_account=account, period=datetime.date(open_cycle.year, 1, 1), status="POSTED",
+                               posted_at=account.created_at)
+    batch = upload(as_user, treasurer, [row(1, "IGE BOLA", ctss=5000, withdrawal=30000, coop=5000, total=5000)], month)
+    assert batch["status"] == "VALIDATED", batch["validation_report"]
+    withdrawal = Transaction.objects.get(batch_id=batch["id"], txn_type="SAVINGS_WITHDRAWAL")
+    assert withdrawal.savings_account == account and withdrawal.amount == D("30000.00")
+
+    too_much = upload(as_user, treasurer, [row(1, "IGE BOLA", withdrawal=90000)], datetime.date(open_cycle.year, 4, 1))
+    assert "holds only" in too_much["validation_report"]["errors"][0]["errors"]["xmas_withdrawal"][0]

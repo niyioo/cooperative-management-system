@@ -149,13 +149,14 @@ class TestMakerChecker:
 
 
 class TestWithdrawals:
-    def test_only_regular_savings_allow_officer_withdrawals(self, as_user, treasurer, regular_account, xmas_account):
+    def test_officers_may_withdraw_from_regular_and_christmas_savings(self, as_user, treasurer, regular_account, xmas_account):
         assert regular_account.product.allow_officer_withdrawal  # EMDI's ledgers show officer withdrawals from savings
+        assert xmas_account.product.allow_officer_withdrawal  # any time while the cycle is open (BR-40)
         assert not regular_account.product.allow_member_withdrawal_request  # never through the portal (BR-01)
         response = as_user(treasurer).post(
             WITHDRAWALS, {"account": str(xmas_account.pk), "amount": "100", "reason": "Emergency"}, format="json"
         )
-        assert code(response) == "withdrawal_not_allowed"
+        assert code(response) in ("insufficient_balance", "cycle_not_open")  # allowed, but nothing saved yet
 
     def test_enabled_withdrawal_needs_balance_and_approval(self, as_user, accountant, treasurer, regular_account, regular):
         regular.allow_officer_withdrawal = True

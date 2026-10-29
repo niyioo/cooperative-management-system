@@ -24,7 +24,7 @@ class CooperativeSettings(models.Model):
 
     # Identity
     name = models.CharField(max_length=200, default="EMDI Cooperative Multipurpose Society Ltd")
-    short_name = models.CharField(max_length=50, default="EMDI Coop")
+    short_name = models.CharField(max_length=50, default="EMDI CMS Ltd")
     parent_institution = models.CharField(
         max_length=255,
         default="Engineering Materials Development Institute (EMDI), NASENI",

@@ -8,7 +8,8 @@ The society's monthly spreadsheet (BR-38), uploaded as it is kept: one row per s
   COOP LOAN, COMMODITY, ELECTRONICS, XMAS LOAN, and TOTAL.
 
 Money received (CTSS + transfer - refund) must equal TOTAL and the sum of the
-columns it goes to. Rows find their member by membership, staff or IPPIS number
+columns it goes to. WITHDRAWAL FROM XMAS SAVINGS is money paid out of the
+member's Christmas Savings (BR-40), so it sits outside that sum. Rows find their member by membership, staff or IPPIS number
 when the sheet has one, otherwise by name (the words of the name, in any order).
 Each amount becomes a contribution or a loan repayment, tagged with how it was
 paid; the whole sheet is one batch that a second officer approves.
@@ -28,7 +29,7 @@ from apps.ledger.models import Transaction
 from apps.members.batch_rows import IDENTIFIER_LABELS, batch_report, column_aliases
 from apps.members.lookup import IDENTIFIER_FIELDS, members_by_identifier
 from apps.members.models import Member, MemberStatus
-from apps.savings.models import SavingsProduct
+from apps.savings.models import SavingsCycle, SavingsProduct
 from apps.savings.rules import contribution_problems, month_end, resolve_account
 
 from .models import Loan, LoanType
@@ -181,7 +182,7 @@ class MonthlyScheduleBatchHandler(BatchHandler):
                     amounts[key] = ZERO
             received = amounts["payroll"] + amounts["transfer"] - amounts["refund"]
             allocated = sum((amounts[k] for k in [*SAVINGS, *LOANS]), ZERO)
-            if not received and not allocated and not amounts["total"] and not row_errors:
+            if not received and not allocated and not amounts["total"] and not amounts["xmas_withdrawal"] and not row_errors:
                 continue  # nothing paid this month
 
             member = None
@@ -207,9 +208,6 @@ class MonthlyScheduleBatchHandler(BatchHandler):
                     row_errors["name"] = [f"{member.full_name} is already on row {seen_members[member.pk]}."]
                 seen_members.setdefault(member.pk, row_number)
 
-            if amounts["xmas_withdrawal"]:
-                row_errors["xmas_withdrawal"] = ["Withdrawals from Christmas Savings are not taken from this sheet yet; "
-                                                 "record them separately and clear this cell."]
             if not row_errors.get("total") and amounts["total"] and amounts["total"] != received:
                 row_errors["total"] = [f"TOTAL is ₦{amounts['total']:,.2f}, but CTSS + transfer - refund is ₦{received:,.2f}."]
             if received != allocated:
@@ -232,6 +230,19 @@ class MonthlyScheduleBatchHandler(BatchHandler):
                         row_errors[key] = problems
                     else:
                         entries.append({"kind": "savings", "product": product, "amount": amounts[key]})
+                if amounts["xmas_withdrawal"]:
+                    product = products.get("CHRISTMAS")
+                    account, problem = resolve_account(member, product, period) if product else (None, "No Christmas Savings product.")
+                    if problem or account is None or account._state.adding:
+                        row_errors["xmas_withdrawal"] = [problem or f"{member.full_name} has no Christmas Savings for {period.year}."]
+                    elif account.cycle.status != SavingsCycle.Status.OPEN:
+                        row_errors["xmas_withdrawal"] = [f"{account.cycle} is not open, so nothing can be withdrawn."]
+                    else:
+                        holds = ledger.posted_balance(account) - ledger.pending_debits(account)
+                        if amounts["xmas_withdrawal"] > holds:
+                            row_errors["xmas_withdrawal"] = [f"Christmas Savings holds only ₦{holds:,.2f}."]
+                        else:
+                            entries.append({"kind": "withdrawal", "account": account, "amount": amounts["xmas_withdrawal"]})
                 running = [l for l in Loan.objects.filter(member=member, status__in=Loan.RUNNING_STATUSES).select_related("product")]
                 already = _schedule_months([l.pk for l in running])
                 for key, (label, loan_type) in LOANS.items():
@@ -269,7 +280,11 @@ class MonthlyScheduleBatchHandler(BatchHandler):
             member, period, channel = line["member"], line["period"], line["channel"]
             how = PaymentChannel(channel).label.lower()
             for entry in line["entries"]:
-                if entry["kind"] == "savings":
+                if entry["kind"] == "withdrawal":
+                    ledger.create_entry(actor, member=member, txn_type=TransactionType.SAVINGS_WITHDRAWAL, amount=entry["amount"],
+                                        account=entry["account"], period=period, value_date=value_date,
+                                        description=f"Withdrawal from Christmas Savings {period:%b %Y}", batch=batch, audit=False)
+                elif entry["kind"] == "savings":
                     account, _ = resolve_account(member, entry["product"], period, create=True)
                     ledger.create_entry(actor, member=member, txn_type=TransactionType.SAVINGS_CONTRIBUTION, amount=entry["amount"],
                                         account=account, period=period, value_date=value_date, channel=channel,
@@ -290,7 +305,10 @@ class MonthlyScheduleBatchHandler(BatchHandler):
                 totals[entry.loan_id] += entry.amount
         checked = set()
         for entry in entries:
-            if entry.savings_account_id:
+            if entry.txn_type == TransactionType.SAVINGS_WITHDRAWAL:
+                holds = ledger.posted_balance(entry.savings_account)
+                issues = [] if entry.amount <= holds else [f"Christmas Savings now holds only ₦{holds:,.2f}."]
+            elif entry.savings_account_id:
                 issues = contribution_problems(entry.savings_account, entry.amount, entry.period, ignore_batch=batch)
             elif entry.loan_id in checked:
                 continue
@@ -319,7 +337,7 @@ class MonthlyScheduleBatchHandler(BatchHandler):
                 ("Transfer to acct", False, "Paid by hand into the society's account."),
                 ("Refund", False, "Over-deducted and paid back to the member."),
                 ("Pre-retirement", False, "Pre-retirement Savings."),
-                ("Withdrawal from xmas savings", False, "Leave blank; record withdrawals separately."),
+                ("Withdrawal from xmas savings", False, "Paid out of the member's Christmas Savings; not part of the total."),
                 ("Electronics", False, "Electronics loan repayment."),
                 ("Commodity", False, "Commodity loan repayment."),
                 ("Xmas loan", False, "Christmas loan repayment."),
