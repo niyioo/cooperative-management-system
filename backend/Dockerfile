@@ -1,27 +1,23 @@
-# /backend/Dockerfile
-FROM python:3.10-slim
+FROM python:3.11-slim
 
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DJANGO_SETTINGS_MODULE=config.settings.prod
 
-# Set work directory
 WORKDIR /app
 
-# Install system dependencies (needed for PostgreSQL)
 RUN apt-get update \
-    && apt-get install -y gcc libpq-dev \
+    && apt-get install -y --no-install-recommends gcc libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-COPY requirements.txt /app/
-RUN pip install --upgrade pip
-RUN pip install -r requirements.txt
+COPY requirements/ /app/requirements/
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements/prod.txt
 
-# 1. COPY THE PROJECT FILES
 COPY . /app/
 
-# 2. THE FIX: We removed the failing RUN collectstatic line entirely!
+RUN useradd --create-home --uid 1000 app && chown -R app:app /app
+USER app
 
-# 3. THE BOOT COMMAND: Collect CSS, run migrations, and start the server
-CMD ["sh", "-c", "python manage.py collectstatic --noinput && python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT"]
+# collectstatic runs at boot so it sees the real environment variables.
+CMD ["sh", "-c", "python manage.py collectstatic --noinput && python manage.py migrate --noinput && python manage.py createcachetable && gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-3}"]
