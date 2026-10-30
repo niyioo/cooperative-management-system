@@ -61,4 +61,6 @@ def reject(txn, *, by) -> ShareTransaction:
         raise ValidationError({"detail": "Only pending share purchases can be rejected."})
     txn.status, txn.approved_by = Status.REJECTED, by
     txn.save()
+    notify(txn.account.member.user, "WARNING", "Share purchase declined",
+           f"Your request for {txn.number_of_shares} share(s) was declined. Please contact the office for details.")
     return txn

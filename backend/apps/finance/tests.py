@@ -117,3 +117,14 @@ class ReversalTests(APITestBase):
         out = StringIO()
         call_command("reconcile", stdout=out)
         self.assertIn("consistent", out.getvalue().lower())
+
+
+class NotificationTests(APITestBase):
+    def test_members_hear_about_declined_share_requests(self):
+        from apps.core.models import Notification
+        SystemSetting.objects.create(share_unit_price="500.00")
+        self.as_user(self.member)
+        txn = self.client.post("/api/v1/shares/transactions/", {"number_of_shares": 4}, format="json").data
+        self.as_user(self.manager)
+        self.assertEqual(self.client.post(f"/api/v1/shares/transactions/{txn['id']}/reject/").status_code, 200)
+        self.assertTrue(Notification.objects.filter(user=self.member, title="Share purchase declined").exists())
