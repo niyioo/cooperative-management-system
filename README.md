@@ -28,9 +28,15 @@ An advanced, full-stack Cooperative Management System designed to handle members
 
 ## 📸 System Preview
 
+Screenshots show the demo cooperative loaded by `python manage.py seed_demo`.
+
 ### 🖥️ Admin Dashboard
-The central hub for system administrators to monitor liquidity, active members, and treasury health.
+The cooperative overview for all staff roles: active members, savings pool, loans and monthly income and expenses.
 ![Dashboard Overview](./docs/screenshots/dashboard.png)
+
+### ✅ Approvals
+Members' savings and share requests wait here until finance staff approve or decline them.
+![Approvals](./docs/screenshots/approvals.png)
 
 ### 👥 Member Management
 Track registered members, their status, and detailed financial profiles.
@@ -47,8 +53,12 @@ Manage member wallets, total liquidity pool, and mandatory levies.
 ![Contributions](./docs/screenshots/contribution.png)
 
 ### 🧾 Finance Ledger
-A master account history for tracking every income and expense transaction within the system.
+A permanent history of every income and expense. Mistakes are corrected with reversing entries, never edits.
 ![Finance Ledger](./docs/screenshots/finance_ledger.png)
+
+### 🙋 Member Dashboard
+Each member sees their own savings, share capital, loans, dues and recent transactions.
+![Member Dashboard](./docs/screenshots/member_dashboard.png)
 
 
 ## 🛠️ Tech Stack
