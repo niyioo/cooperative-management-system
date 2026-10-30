@@ -11,20 +11,23 @@ const BuySharesModal = ({ isOpen, onClose, onSuccess }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
 
-    // Set your cooperative's standard share price here
-    const SHARE_UNIT_PRICE = 1000; 
-    
-    // Auto-calculate the total cost
-    const totalCost = numShares ? parseInt(numShares, 10) * SHARE_UNIT_PRICE : 0;
+    // The unit price is set by management in Settings; the server applies it.
+    const [unitPrice, setUnitPrice] = useState(null);
+    const totalCost = numShares && unitPrice ? parseInt(numShares, 10) * unitPrice : 0;
 
     useEffect(() => {
         if (isOpen) {
             const fetchMembers = async () => {
                 setLoadingMembers(true);
                 try {
-                    const response = await axiosInstance.get('/members/profiles/');
-                    const data = response.data.results || response.data;
-                    setMembers(data);
+                    const [membersRes, settingsRes] = await Promise.all([
+                        axiosInstance.get('/members/profiles/', { params: { page_size: 100 } }),
+                        axiosInstance.get('/core/settings/'),
+                    ]);
+                    setMembers(membersRes.data.results || membersRes.data);
+                    const settings = (settingsRes.data.results || settingsRes.data)[0];
+                    setUnitPrice(settings?.share_unit_price ? Number(settings.share_unit_price) : null);
+                    if (!settings?.share_unit_price) setError("The share price hasn't been set yet. Set it in Settings first.");
                 } catch (err) {
                     console.error("Failed to fetch members:", err);
                     setError("Could not load members for the dropdown.");
@@ -49,17 +52,16 @@ const BuySharesModal = ({ isOpen, onClose, onSuccess }) => {
         setIsSubmitting(true);
 
         try {
-            // Adjust payload to match your Django backend requirements
             await axiosInstance.post('/shares/transactions/', {
                 member: memberId,
-                transaction_type: 'PURCHASE',
-                shares: parseInt(numShares, 10),
-                amount: totalCost
+                number_of_shares: parseInt(numShares, 10),
             });
             
             onSuccess(`Successfully purchased ${numShares} shares!`);
         } catch (err) {
-            setError(err.response?.data?.detail || err.response?.data?.message || 'Failed to process share purchase.');
+            const data = err.response?.data || {};
+            const first = Object.values(data)[0];
+            setError(data.detail || (Array.isArray(first) ? first[0] : first) || 'Failed to process share purchase.');
         } finally {
             setIsSubmitting(false);
         }
@@ -140,7 +142,7 @@ const BuySharesModal = ({ isOpen, onClose, onSuccess }) => {
                                     placeholder="e.g. 50"
                                 />
                             </div>
-                            <p className="mt-1.5 text-xs text-slate-500">Unit Price: {formatCurrency(SHARE_UNIT_PRICE)} per share</p>
+                            <p className="mt-1.5 text-xs text-slate-500">Unit Price: {unitPrice ? formatCurrency(unitPrice) : '—'} per share</p>
                         </div>
 
                         {/* Calculated Total (Visual Only) */}

@@ -4,70 +4,62 @@ from rest_framework.decorators import action
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from .models import Member, NextOfKin, MemberDocument
 from .serializers import MemberSerializer, NextOfKinSerializer, MemberDocumentSerializer
-from apps.accounts.permissions import IsManagerOrAdmin, IsOwnerOrManager
+from apps.accounts.permissions import STAFF, IsManagerOrAdmin, IsOwnerOrManager, IsStaff
 
 User = get_user_model()
 
 class MemberViewSet(viewsets.ModelViewSet):
+    """
+    Members are never deleted (their savings, loans and history must remain);
+    they are suspended or made inactive with update_status instead.
+    Public sign-up is /auth/register/; this endpoint is for managers registering members.
+    """
     serializer_class = MemberSerializer
-    
+    http_method_names = ['get', 'post', 'put', 'patch', 'head', 'options']
+
     def get_permissions(self):
-        # Allow anyone (even unauthenticated) to POST to the create/register endpoint
-        if self.action == 'create':
-            return [permissions.AllowAny()]
-        if self.action in ['list', 'update_status', 'approve']:
+        if self.action in ['create', 'update_status', 'approve']:
             return [IsManagerOrAdmin()]
+        if self.action == 'list':
+            return [IsStaff()]
         return [permissions.IsAuthenticated(), IsOwnerOrManager()]
 
     def get_queryset(self):
         user = self.request.user
         queryset = Member.objects.select_related('user', 'approved_by')\
-                                 .prefetch_related('next_of_kin', 'documents')
-        
-        if user.is_authenticated and user.role in ['SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT']:
-            return queryset.all()
-        
+                                 .prefetch_related('next_of_kin', 'documents').order_by('last_name', 'first_name')
+        if user.is_authenticated and user.role in STAFF:
+            return queryset
         return queryset.filter(user=user)
 
     def create(self, request, *args, **kwargs):
-        """
-        Custom create logic to handle both User and Member profile creation.
-        Matches the RegisterModal.jsx payload.
-        """
-        email = request.data.get('email')
-        password = request.data.get('password')
-        
-        # 1. Check if user already exists (Safety check)
-        if User.objects.filter(email=email).exists():
-            return Response(
-                {"detail": "A user with this email already exists."}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
+        """A manager registers a member: user account and profile together, approved by them."""
+        email = (request.data.get('email') or '').strip()
+        password = request.data.get('password') or ''
+        if not email:
+            return Response({"email": ["Enter an email address."]}, status=status.HTTP_400_BAD_REQUEST)
+        if User.objects.filter(email__iexact=email).exists():
+            return Response({"email": ["A user with this email already exists."]}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            with transaction.atomic():
-                # 2. Create the User
-                user = User.objects.create_user(
-                    email=email,
-                    password=password,
-                    first_name=request.data.get('first_name', ''),
-                    last_name=request.data.get('last_name', ''),
-                    role='MEMBER'
-                )
+            validate_password(password, user=User(email=email))
+        except DjangoValidationError as exc:
+            return Response({"password": list(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
 
-                # 3. Handle Member Profile (Prevent duplicate key error from Django signals)
-                member, created = Member.objects.get_or_create(user=user)
-                
-                serializer = self.get_serializer(member, data=request.data)
-                serializer.is_valid(raise_exception=True)
-                serializer.save(user=user)
-                
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-                
-        except Exception as e:
-            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        with transaction.atomic():
+            user = User.objects.create_user(
+                email=email, password=password, role=User.Role.MEMBER,
+                first_name=request.data.get('first_name', ''), last_name=request.data.get('last_name', ''),
+            )
+            # The profile is created automatically with the user; fill it in.
+            member = Member.objects.get(user=user)
+            serializer = self.get_serializer(member, data=request.data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save(user=user, status=Member.Status.ACTIVE, approved_by=request.user)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin])
     def approve(self, request, pk=None):

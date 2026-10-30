@@ -24,9 +24,16 @@ class SystemSetting(TimeStampedUUIDModel):
     cooperative_name = models.CharField(max_length=255, default="BravEdge Solutions Cooperative")
     currency = models.CharField(max_length=10, default="NGN (₦)")
     registration_number = models.CharField(max_length=100, default="COOP-2026-001")
+    # Price of one share unit, set by management. Members never choose the price.
+    share_unit_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 
     def __str__(self):
         return f"Settings for {self.cooperative_name}"
+
+    @classmethod
+    def current(cls):
+        """The cooperative's settings row (the most recently updated one)."""
+        return cls.objects.order_by('-updated_at').first()
 
 
 class Notification(TimeStampedUUIDModel):

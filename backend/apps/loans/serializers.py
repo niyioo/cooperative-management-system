@@ -28,7 +28,7 @@ class LoanRepaymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = LoanRepayment
         fields = '__all__'
-        read_only_fields = ['id', 'payment_date', 'received_by', 'created_at']
+        read_only_fields = ['id', 'payment_date', 'receipt_reference', 'received_by', 'created_at', 'updated_at']
 
 class LoanSerializer(serializers.ModelSerializer):
     # For GET requests (React Table displays)
@@ -38,9 +38,10 @@ class LoanSerializer(serializers.ModelSerializer):
     # Matches the 'balance' key used in React state
     balance = serializers.DecimalField(source='balance_remaining', max_digits=15, decimal_places=2, read_only=True)
     
-    # For POST requests (React Form Submission)
+    # For POST requests. Only loan staff may name another member; for everyone
+    # else the view always uses their own profile.
     member_id = serializers.PrimaryKeyRelatedField(
-        queryset=Member.objects.all(), source='member', write_only=True
+        queryset=Member.objects.all(), source='member', write_only=True, required=False
     )
     loan_product_id = serializers.PrimaryKeyRelatedField(
         queryset=LoanProduct.objects.all(), source='loan_product', write_only=True

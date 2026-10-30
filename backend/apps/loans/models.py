@@ -1,5 +1,5 @@
 import uuid
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from django.db import models
 from django.conf import settings
 from apps.core.models import TimeStampedUUIDModel
@@ -48,24 +48,17 @@ class Loan(TimeStampedUUIDModel):
         if not self.loan_id:
             self.loan_id = f"LN-{uuid.uuid4().hex[:6].upper()}"
             
-        # Calculate totals on initial creation
-        if not self.pk: 
-            # Logic: (Principal * Rate / 100)
-            # Note: You can multiply by (duration_months / 12) if the rate is annual
-            interest = (self.principal_amount * self.loan_product.interest_rate) / Decimal('100.00')
+        # Calculate totals on initial creation. (The UUID primary key is set before
+        # the first save, so `self.pk` can't tell a new loan from an old one.)
+        if self._state.adding:
+            # Flat rate on the principal: Principal × Rate / 100, rounded to the kobo.
+            interest = (self.principal_amount * self.loan_product.interest_rate / Decimal('100')).quantize(
+                Decimal('0.01'), rounding=ROUND_HALF_UP)
             self.interest_amount = interest
             self.total_payable = self.principal_amount + interest
             self.balance_remaining = self.total_payable
-            
-        super().save(*args, **kwargs)
 
-    def update_balance(self, payment_amount):
-        """Helper to reduce balance when a repayment is made"""
-        self.balance_remaining -= Decimal(str(payment_amount))
-        if self.balance_remaining <= 0:
-            self.balance_remaining = 0
-            self.status = self.Status.COMPLETED
-        self.save()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.loan_id} - {self.member.first_name} ({self.status})"

@@ -24,7 +24,7 @@ const Navbar = ({ onMenuClick }) => {
 
     const handleMarkAllRead = async () => {
         try {
-            await axiosInstance.post('/notifications/mark_all_read/');
+            await axiosInstance.post('/core/notifications/mark_all_read/');
             refresh(); // Update the list immediately
         } catch (error) {
             console.error("Failed to clear notifications", error);

@@ -1,10 +1,14 @@
-from rest_framework import viewsets, permissions, status
-from rest_framework.response import Response
+from rest_framework import mixins, permissions, viewsets
 from rest_framework.decorators import action
-from django.db import transaction
+from rest_framework.exceptions import ValidationError
+from rest_framework.response import Response
+
+from apps.accounts.permissions import FINANCE_STAFF, IsFinanceStaff
+
+from . import services
 from .models import ShareAccount, ShareTransaction
 from .serializers import ShareAccountSerializer, ShareTransactionSerializer
-from apps.accounts.permissions import IsManagerOrAdmin # Update path if needed
+
 
 class ShareAccountViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ShareAccountSerializer
@@ -12,71 +16,44 @@ class ShareAccountViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        queryset = ShareAccount.objects.select_related('member').all()
-        if user.role in ['SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT']:
+        queryset = ShareAccount.objects.select_related('member').order_by('member__last_name')
+        if user.role in FINANCE_STAFF:
             return queryset
         return queryset.filter(member__user=user)
 
-class ShareTransactionViewSet(viewsets.ModelViewSet):
+
+class ShareTransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.CreateModelMixin,
+                              viewsets.GenericViewSet):
+    """Purchases at the price set in Settings; permanent once made."""
+
     serializer_class = ShareTransactionSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
-        if user.role in ['SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT']:
-            return ShareTransaction.objects.all()
-        return ShareTransaction.objects.filter(account__member__user=user)
+        queryset = ShareTransaction.objects.select_related('account__member').order_by('-created_at')
+        status_filter = self.request.query_params.get('status')
+        if status_filter:
+            queryset = queryset.filter(status=status_filter.upper())
+        if user.role in FINANCE_STAFF:
+            return queryset
+        return queryset.filter(account__member__user=user)
 
     def perform_create(self, serializer):
         user = self.request.user
-        
-        if user.role in ['SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT']:
-            account = serializer.validated_data.get('account')
-            txn_status = ShareTransaction.Status.APPROVED
-            approved_by = user
+        data = serializer.validated_data
+        if user.role in FINANCE_STAFF:
+            member = data.get('member') or (data['account'].member if data.get('account') else None)
+            if member is None:
+                raise ValidationError({"member": "Choose the member buying the shares."})
         else:
-            account = ShareAccount.objects.get(member__user=user)
-            txn_status = ShareTransaction.Status.PENDING
-            approved_by = None
+            member = user.member_profile
+        serializer.instance = services.purchase(member=member, number_of_shares=data['number_of_shares'], by=user)
 
-        with transaction.atomic():
-            txn = serializer.save(
-                account=account,
-                status=txn_status,
-                approved_by=approved_by
-            )
-            
-            # Auto-update if Manager creates it
-            if txn.status == ShareTransaction.Status.APPROVED:
-                account.total_shares += txn.number_of_shares
-                account.current_value += txn.total_amount
-                account.save()
-
-    @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin])
+    @action(detail=True, methods=['post'], permission_classes=[IsFinanceStaff])
     def approve(self, request, pk=None):
-        txn = self.get_object()
-        if txn.status == ShareTransaction.Status.APPROVED:
-            return Response({"detail": "Transaction already approved"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(ShareTransactionSerializer(services.approve(self.get_object(), by=request.user)).data)
 
-        with transaction.atomic():
-            txn.status = ShareTransaction.Status.APPROVED
-            txn.approved_by = request.user
-            txn.save()
-
-            account = txn.account
-            account.total_shares += txn.number_of_shares
-            account.current_value += txn.total_amount
-            account.save()
-
-        return Response({"status": "Shares approved and ledger updated."})
-
-    @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin])
+    @action(detail=True, methods=['post'], permission_classes=[IsFinanceStaff])
     def reject(self, request, pk=None):
-        """Allows Admins to reject a pending share purchase."""
-        txn = self.get_object()
-        if txn.status != ShareTransaction.Status.PENDING:
-            return Response({"detail": "Only pending requests can be rejected."}, status=status.HTTP_400_BAD_REQUEST)
-
-        txn.status = ShareTransaction.Status.REJECTED
-        txn.save()
-        return Response({"status": "Share purchase request rejected."})
+        return Response(ShareTransactionSerializer(services.reject(self.get_object(), by=request.user)).data)

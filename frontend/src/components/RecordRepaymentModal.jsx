@@ -22,18 +22,8 @@ const RecordRepaymentModal = ({ isOpen, onClose, loan, onSuccess }) => {
                 amount_paid: parseFloat(amount),
             };
 
-            // 1. Record the repayment
+            // The server records the matching ledger income in the same transaction.
             await axiosInstance.post('/loans/repayments/', payload);
-
-            // 2. Add an entry to the Finance Ledger so the Treasury Snapshot updates
-            await axiosInstance.post('/finance/ledger/', {
-                type: 'INCOME',
-                category: 'Loan Repayment',
-                amount: parseFloat(amount),
-                member: loan.member.id,
-                description: `Repayment for Loan ${loan.loan_id}`,
-                date: new Date().toISOString().split('T')[0]
-            });
 
             if (onSuccess) onSuccess('Repayment recorded successfully!');
             setAmount('');

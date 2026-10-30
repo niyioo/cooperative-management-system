@@ -56,7 +56,8 @@ const TransactionModal = ({ isOpen, onClose, onSuccess, type }) => {
                 account: accountId,
                 transaction_type: type,
                 amount: parseFloat(amount),
-                reference: reference || `${type} via Manager Dashboard`
+                // The server assigns a unique reference; what staff type is kept as the note.
+                description: reference || `${isDeposit ? 'Deposit' : 'Withdrawal'} via manager dashboard`
             });
             
             onSuccess(isDeposit ? 'Deposit recorded successfully!' : 'Withdrawal processed successfully!');

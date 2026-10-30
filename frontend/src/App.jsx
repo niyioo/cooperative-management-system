@@ -16,6 +16,7 @@ import Contributions from './pages/dashboard/Contributions';
 import FinanceLedger from './pages/finance/FinanceLedger';
 import Settings from './pages/dashboard/Settings';
 import Notifications from './pages/dashboard/Notifications';
+import Approvals from './pages/dashboard/Approvals';
 
 const Unauthorized = () => (
   <div className="flex h-screen items-center justify-center bg-slate-50">
@@ -50,6 +51,7 @@ function App() {
               <Route path="finance" element={<FinanceLedger />} />
               <Route path="settings" element={<Settings />} />
               <Route path="notifications" element={<Notifications />} />
+              <Route path="approvals" element={<Approvals />} />
             </Route>
           </Route>
 

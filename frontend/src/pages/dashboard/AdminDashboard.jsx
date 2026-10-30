@@ -23,7 +23,9 @@ const StatCard = ({ title, value, icon: Icon, colorClass }) => (
 );
 
 const AdminDashboard = () => {
-    const { user, isManager } = useAuth();
+    const { user } = useAuth();
+    // Every staff role gets the cooperative view, as the server does; members get their own.
+    const isStaff = Boolean(user) && user.role !== 'MEMBER';
     const navigate = useNavigate();
     const [summary, setSummary] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -87,7 +89,7 @@ const AdminDashboard = () => {
         </div>
     );
 
-    if (!isManager) return <MemberDashboard />;
+    if (!isStaff) return <MemberDashboard />;
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
@@ -102,7 +104,7 @@ const AdminDashboard = () => {
                     </div>
                     <div>
                         <h1 className="text-2xl font-black text-slate-900 tracking-tight">Cooperative Overview</h1>
-                        <p className="text-xs font-bold text-blue-600 uppercase tracking-tighter">System Administrator</p>
+                        <p className="text-xs font-bold text-blue-600 uppercase tracking-tighter">{user.role.replace('_', ' ')}</p>
                     </div>
                 </div>
             </div>

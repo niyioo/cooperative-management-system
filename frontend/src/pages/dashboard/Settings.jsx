@@ -217,8 +217,18 @@ const Settings = () => {
                                             type="text" 
                                             value={systemData.registration_number} 
                                             onChange={e => setSystemData({...systemData, registration_number: e.target.value})}
-                                            className="block w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-slate-900 focus:border-slate-900 sm:text-sm" 
+                                            className="block w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-slate-900 focus:border-slate-900 sm:text-sm"
                                         />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Share Unit Price (₦)</label>
+                                        <input
+                                            type="number" min="0.01" step="0.01"
+                                            value={systemData.share_unit_price ?? ''}
+                                            onChange={e => setSystemData({...systemData, share_unit_price: e.target.value || null})}
+                                            className="block w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-slate-900 focus:border-slate-900 sm:text-sm"
+                                        />
+                                        <p className="mt-1 text-xs text-slate-500">Applies to new purchases. Members never set the price themselves.</p>
                                     </div>
                                 </div>
                             </div>

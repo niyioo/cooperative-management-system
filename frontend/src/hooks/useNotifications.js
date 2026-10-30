@@ -8,9 +8,9 @@ export const useNotifications = () => {
     const fetchData = async () => {
         try {
             // 1. Get the actual list for the dropdown
-            const listRes = await axiosInstance.get('/notifications/latest/');
+            const listRes = await axiosInstance.get('/core/notifications/latest/');
             // 2. Get the count for the red dot
-            const countRes = await axiosInstance.get('/notifications/unread_count/');
+            const countRes = await axiosInstance.get('/core/notifications/unread_count/');
             
             setNotifications(listRes.data);
             setUnreadCount(countRes.data.unread_count);

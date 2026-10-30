@@ -51,7 +51,8 @@ class SavingsTransaction(TimeStampedUUIDModel):
     
     # Use 'accounts.CustomUser' string to avoid circular imports
     approved_by = models.ForeignKey('accounts.CustomUser', on_delete=models.SET_NULL, null=True, blank=True)
-    history = HistoricalRecords() # ✅ Added history here too!
+    rejection_reason = models.TextField(blank=True, default="")
+    history = HistoricalRecords()
 
     def __str__(self):
         return f"{self.transaction_type} of ₦{self.amount} - {self.status}"

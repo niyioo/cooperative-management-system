@@ -25,6 +25,10 @@ class LedgerEntry(TimeStampedUUIDModel):
     
     recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
 
+    # Entries are never edited or deleted. A mistake is corrected by a reversing
+    # entry of the opposite type that points back at the original.
+    reverses = models.OneToOneField('self', on_delete=models.PROTECT, null=True, blank=True, related_name='reversed_by')
+
     def save(self, *args, **kwargs):
         if not self.reference_id:
             prefix = "INC" if self.type == self.EntryType.INCOME else "EXP"

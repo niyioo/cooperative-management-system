@@ -3,22 +3,23 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { 
     LayoutDashboard, Users, Wallet, Landmark, 
-    PieChart, Receipt, FileBarChart, Settings, X 
+    PieChart, Receipt, FileBarChart, Settings, X, ClipboardCheck 
 } from 'lucide-react';
 
 // ✅ Added isOpen and toggleSidebar props
 const Sidebar = ({ isOpen, toggleSidebar }) => {
-    const { user, isSuperAdmin, isManager } = useAuth();
+    const { user, isSuperAdmin, isManager, isFinance } = useAuth();
     const navigate = useNavigate();
 
     const navItems = [
         { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, show: true },
+        { name: 'Approvals', path: '/approvals', icon: ClipboardCheck, show: isFinance },
         { name: 'Members', path: '/members', icon: Users, show: isManager || isSuperAdmin },
         { name: 'Savings', path: '/savings', icon: Wallet, show: true },
         { name: 'Loans', path: '/loans', icon: Landmark, show: true },
         { name: 'Shares', path: '/shares', icon: PieChart, show: true },
         { name: 'Contributions', path: '/contributions', icon: Receipt, show: true },
-        { name: 'Finance Ledger', path: '/finance', icon: FileBarChart, show: isManager || isSuperAdmin },
+        { name: 'Finance Ledger', path: '/finance', icon: FileBarChart, show: isFinance },
         { name: 'Settings', path: '/settings', icon: Settings, show: isSuperAdmin || isManager },
     ];
 

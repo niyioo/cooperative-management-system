@@ -13,19 +13,41 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
+from decimal import Decimal
+
+from rest_framework import mixins
+
+from . import services
 from .models import LedgerEntry
 from .serializers import LedgerEntrySerializer
-from apps.accounts.permissions import IsManagerOrAdmin 
+from apps.accounts.permissions import IsFinanceStaff, IsManagerOrAdmin
 
-class LedgerEntryViewSet(viewsets.ModelViewSet):
-    """Global Income and Expense Ledger with PDF Export."""
-    
+
+class LedgerEntryViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.CreateModelMixin,
+                         viewsets.GenericViewSet):
+    """
+    Global Income and Expense Ledger with PDF Export.
+    Entries are permanent: there is no edit or delete, only `reverse`.
+    """
+
     queryset = LedgerEntry.objects.select_related('member__user', 'recorded_by').order_by('-date', '-created_at')
     serializer_class = LedgerEntrySerializer
-    permission_classes = [IsManagerOrAdmin]
+    permission_classes = [IsFinanceStaff]
 
     def perform_create(self, serializer):
-        serializer.save(recorded_by=self.request.user)
+        data = serializer.validated_data
+        serializer.instance = services.record(
+            type=data['type'], category=data['category'], amount=data['amount'], date=data.get('date'),
+            description=data['description'], member=data.get('member'), recorded_by=self.request.user,
+        )
+
+    @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin])
+    def reverse(self, request, pk=None):
+        reason = (request.data.get('reason') or '').strip()
+        if len(reason) < 5:
+            return Response({"reason": "Give a reason of at least 5 characters."}, status=status.HTTP_400_BAD_REQUEST)
+        reversal = services.reverse(self.get_object(), by=request.user, reason=reason)
+        return Response(LedgerEntrySerializer(reversal).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['get'])
     def export_pdf(self, request):
@@ -61,11 +83,11 @@ class LedgerEntryViewSet(viewsets.ModelViewSet):
         data = [['Date', 'Reference', 'Category', 'Member', 'Type', 'Amount']]
         
         # Table Rows
-        total_income = 0
-        total_expense = 0
+        total_income = Decimal("0.00")
+        total_expense = Decimal("0.00")
 
         for tx in queryset:
-            amount_val = float(tx.amount)
+            amount_val = tx.amount
             if tx.type == 'INCOME':
                 total_income += amount_val
             else:

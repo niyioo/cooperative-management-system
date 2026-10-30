@@ -12,6 +12,19 @@ An advanced, full-stack Cooperative Management System designed to handle members
 * **Contributions & Fines:** Automate mandatory/voluntary dues, levies, and penalty tracking.
 * **Financial Ledger:** Global cooperative income and expense tracking.
 * **Analytics Dashboard:** Real-time visual metrics using Recharts.
+* **Approvals Queue:** Finance staff approve or decline members' savings and share requests in one place; nothing moves until they do.
+
+## 🛡️ Money Integrity & Security
+
+* **One locked path for every balance change.** Savings, loans, shares and dues each have a service (`apps/*/services.py`) that locks the account row, checks the rules and records the ledger entry in the same transaction. Two clicks at the same moment can't double-count, and no account can go below zero.
+* **Permanent records.** Transactions, repayments, dues and ledger entries are never edited or deleted. A ledger mistake is corrected with a reversing entry that points back at the original.
+* **Separation of duties.** Members can only request; staff approve. Nobody approves, disburses or decides on their own loan. Repayments are recorded only by staff, and can't exceed what is owed. The share price comes from Settings, never from the request.
+* **Daily integrity check.** `python manage.py reconcile` compares every savings, loan and share balance with the transactions behind it and exits non-zero on any discrepancy.
+* **Safe sign-in.** The refresh token lives in an httpOnly cookie, the access token only in memory; logout revokes the session; sign-in and sign-up are rate-limited. Public sign-up always creates an unapproved member.
+* **Safe defaults.** `DEBUG` is off unless set, a `SECRET_KEY` is required, and no password is written in the code.
+* **Tests.** 65 API tests cover the money rules above (`python manage.py test apps --settings=config.settings_test`).
+
+> **Upgrading from an earlier version?** Before these fixes, approved savings transactions could be counted twice. Run `python manage.py reconcile` once after upgrading and review any account it lists.
 
 ## 📸 System Preview
 
@@ -72,9 +85,11 @@ Before you begin, ensure you have the following installed:
 Create a new PostgreSQL database. You can do this via pgAdmin or the psql CLI:
 ```sql
 CREATE DATABASE cooperative_db;
-CREATE USER coop_user WITH PASSWORD 'Coop@12345';
+CREATE USER coop_user WITH PASSWORD 'choose-a-strong-password';
 GRANT ALL PRIVILEGES ON DATABASE cooperative_db TO coop_user;
 ```
+
+Or with Docker: copy `.env.example` to `.env`, set `DB_PASSWORD`, then `docker compose up`.
 
 ### 2. Backend Setup
 Navigate to the backend directory, set up your virtual environment, and install dependencies.
@@ -92,20 +107,8 @@ pip install -r requirements.txt
 ```
 
 **Environment Variables**
-Create a `.env` file inside the `backend` folder next to `manage.py`:
-```env
-DEBUG=True
-SECRET_KEY=your-secret-key-here
-ALLOWED_HOSTS=127.0.0.1,localhost
-
-DB_NAME=cooperative_db
-DB_USER=coop_user
-DB_PASSWORD=Coop@12345
-DB_HOST=localhost
-DB_PORT=5432
-
-CORS_ALLOWED_ORIGIN=http://localhost:5173
-```
+Copy `backend/.env.example` to `backend/.env` and fill it in. For local development set `DEBUG=True`,
+`AUTH_COOKIE_SECURE=False` and `CORS_ALLOWED_ORIGINS=http://localhost:5173`.
 
 **Migrate & Run**
 ```bash
@@ -119,6 +122,22 @@ python manage.py createsuperuser
 python manage.py runserver
 ```
 *The backend API will run on `http://127.0.0.1:8000`*
+
+**Quick try without PostgreSQL**
+```bash
+python manage.py migrate --settings=config.settings_local
+python manage.py seed_demo --settings=config.settings_local      # demo cooperative, dates relative to today
+python manage.py runserver --settings=config.settings_local
+```
+`seed_demo` only runs with `DEBUG` on. Its accounts (`admin@`, `manager@`, `accountant@`, `loans@`,
+and members such as `chioma@coopmanager.local`) share the demo password in
+`backend/apps/core/management/commands/seed_demo.py`. Reload it with `seed_demo --reset`.
+
+**Tests and integrity check**
+```bash
+python manage.py test apps --settings=config.settings_test   # in-memory SQLite
+python manage.py reconcile                                   # read-only; exit 1 on any discrepancy
+```
 
 ### 3. Frontend Setup
 Open a new terminal window, navigate to the frontend directory, and install dependencies.
@@ -139,7 +158,9 @@ npm run dev
 ## 🔐 Default API Endpoints
 
 * **Admin Panel:** `http://127.0.0.1:8000/admin/`
-* **Auth (Login):** `/api/v1/auth/login/`
+* **Auth:** `POST /api/v1/auth/login/` → `{access}` (refresh token set as an httpOnly cookie), `POST /api/v1/auth/login/refresh/` and `/api/v1/auth/logout/` with a JSON body `{}`
+* **Approvals:** `POST /api/v1/savings/transactions/{id}/approve/` or `/reject/` (`{reason}`), the same for `/shares/transactions/`
+* **Ledger corrections:** `POST /api/v1/finance/ledger/{id}/reverse/` (`{reason}`; managers)
 * **Dashboard Summary:** `/api/v1/reports/dashboard-summary/`
 
 ## 📁 Project Structure

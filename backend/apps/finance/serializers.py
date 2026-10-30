@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 from .models import LedgerEntry
 from apps.members.models import Member
@@ -13,15 +15,21 @@ class LedgerEntrySerializer(serializers.ModelSerializer):
     # ✅ Added these two fields so the React frontend table populates correctly
     member_name = serializers.SerializerMethodField()
     recorded_by_name = serializers.CharField(source='recorded_by.email', read_only=True)
+    amount = serializers.DecimalField(max_digits=15, decimal_places=2, min_value=Decimal('0.01'))
+    date = serializers.DateField(required=False)
+    reversed = serializers.SerializerMethodField()
 
     class Meta:
         model = LedgerEntry
         fields = [
-            'id', 'reference_id', 'type', 'category', 'amount', 
-            'date', 'description', 'member', 'member_name', 
-            'recorded_by_name', 'created_at'
+            'id', 'reference_id', 'type', 'category', 'amount',
+            'date', 'description', 'member', 'member_name',
+            'recorded_by_name', 'reverses', 'reversed', 'created_at'
         ]
-        read_only_fields = ['id', 'reference_id', 'recorded_by', 'created_at']
+        read_only_fields = ['id', 'reference_id', 'recorded_by', 'reverses', 'created_at']
+
+    def get_reversed(self, obj):
+        return hasattr(obj, 'reversed_by')
 
     def get_member_name(self, obj):
         if obj.member:
