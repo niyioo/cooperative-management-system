@@ -3,14 +3,14 @@ import axiosInstance from '../../api/axios';
 import { useAuth } from '../../hooks/useAuth';
 import { 
     Search, Plus, FileText, CheckCircle, XCircle, AlertCircle, Loader2, 
-    Landmark, Activity, MoreVertical, Banknote, Trash2, CreditCard 
+    Landmark, Activity, MoreVertical, Banknote, CreditCard 
 } from 'lucide-react';
 import LoanApplicationModal from '../../components/LoanApplicationModal';
 import LoanDetailsModal from '../../components/LoanDetailsModal';
 import RecordRepaymentModal from '../../components/RecordRepaymentModal';
 
 const Loans = () => {
-    const { isManager } = useAuth();
+    const { isLoanOfficer } = useAuth();
     const [loans, setLoans] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -244,7 +244,7 @@ const Loans = () => {
                                         <td className="px-6 py-4 whitespace-nowrap text-right relative">
                                             <div className="flex items-center justify-end space-x-2">
                                                 {/* Disburse for Approved */}
-                                                {loan.status === 'APPROVED' && isManager && (
+                                                {loan.status === 'APPROVED' && isLoanOfficer && (
                                                     <button 
                                                         onClick={(e) => { e.stopPropagation(); handleLoanAction(loan.id, 'disburse'); }}
                                                         className="p-1.5 text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors shadow-sm"
@@ -255,7 +255,7 @@ const Loans = () => {
                                                 )}
 
                                                 {/* Approval for Pending */}
-                                                {loan.status === 'PENDING' && isManager && (
+                                                {loan.status === 'PENDING' && isLoanOfficer && (
                                                     <>
                                                         <button 
                                                             onClick={(e) => { e.stopPropagation(); handleLoanAction(loan.id, 'approve'); }}
@@ -320,12 +320,6 @@ const Loans = () => {
                                                                         className="w-full px-4 py-2 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center"
                                                                     >
                                                                         <CreditCard className="h-3.5 w-3.5 mr-2 text-emerald-500" /> Record Repayment
-                                                                    </button>
-                                                                )}
-
-                                                                {isManager && (
-                                                                    <button className="w-full px-4 py-2 text-left text-xs font-bold text-red-600 hover:bg-red-50 flex items-center border-t border-slate-50 mt-1">
-                                                                        <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete Record
                                                                     </button>
                                                                 )}
                                                             </div>

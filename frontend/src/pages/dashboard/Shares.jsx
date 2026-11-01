@@ -37,7 +37,7 @@ const Shares = () => {
     }, []);
 
     // Quick Stats Calculations
-    const totalShareCapital = shareAccounts.reduce((sum, acc) => sum + parseFloat(acc.total_value || 0), 0);
+    const totalShareCapital = shareAccounts.reduce((sum, acc) => sum + parseFloat(acc.current_value || 0), 0);
     const totalSharesIssued = shareAccounts.reduce((sum, acc) => sum + parseInt(acc.total_shares || 0, 10), 0);
     const activeShareholders = shareAccounts.filter(acc => acc.total_shares > 0).length;
 
@@ -177,7 +177,7 @@ const Shares = () => {
                                             <span className="text-sm font-medium text-slate-900">{parseInt(account.total_shares).toLocaleString()}</span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right">
-                                            <span className="text-sm font-bold text-slate-900">{formatCurrency(account.total_value)}</span>
+                                            <span className="text-sm font-bold text-slate-900">{formatCurrency(account.current_value)}</span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
                                             {account.updated_at ? format(new Date(account.updated_at), 'MMM dd, yyyy') : 'N/A'}

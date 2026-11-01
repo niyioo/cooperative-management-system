@@ -121,7 +121,7 @@ const AdminDashboard = () => {
                 <StatCard title="Active Members" value={summary?.members?.active || 0} icon={Users} colorClass="bg-blue-600" />
                 <StatCard title="Savings Pool" value={formatCurrency(summary?.financials?.total_savings)} icon={Wallet} colorClass="bg-emerald-600" />
                 <StatCard title="Loans Active" value={formatCurrency(summary?.financials?.total_loans_disbursed)} icon={Landmark} colorClass="bg-indigo-600" />
-                <StatCard title="Net Profit" value={formatCurrency(summary?.financials?.net_profit)} icon={TrendingUp} colorClass="bg-slate-900" />
+                <StatCard title="Net Cash Flow" value={formatCurrency(summary?.financials?.net_profit)} icon={TrendingUp} colorClass="bg-slate-900" />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -161,11 +161,11 @@ const AdminDashboard = () => {
                                 <span className="font-bold text-white">{formatCurrency(summary?.financials?.total_shares)}</span>
                             </div>
                             <div className="flex justify-between border-b border-slate-800 pb-4">
-                                <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Gross Income</span>
+                                <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Money In</span>
                                 <span className="font-bold text-emerald-400">{formatCurrency(summary?.financials?.coop_income)}</span>
                             </div>
                             <div className="flex justify-between">
-                                <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Total Expenses</span>
+                                <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Money Out (incl. loans)</span>
                                 <span className="font-bold text-rose-400">{formatCurrency(summary?.financials?.coop_expenses)}</span>
                             </div>
                         </div>

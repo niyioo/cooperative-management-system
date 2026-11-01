@@ -25,6 +25,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             'user': {
                 'id': str(self.user.id),
                 'email': self.user.email,
+                'first_name': self.user.first_name,
+                'last_name': self.user.last_name,
                 'role': self.user.role
             }
         })
@@ -33,8 +35,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'email', 'role', 'is_active', 'created_at']
-        read_only_fields = ['id', 'created_at']
+        fields = ['id', 'email', 'first_name', 'last_name', 'role', 'is_active', 'created_at']
+        read_only_fields = ['id', 'first_name', 'last_name', 'created_at']
 
 class RegisterUserSerializer(serializers.ModelSerializer):
     """

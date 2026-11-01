@@ -114,9 +114,9 @@ class DashboardExportPDFView(APIView):
             ['Total Savings Pool', f"N{f['total_savings']:,.2f}"],
             ['Total Share Capital', f"N{f['total_shares']:,.2f}"],
             ['Total Loan Portfolio', f"N{f['total_loans_disbursed']:,.2f}"],
-            ['Cooperative Income', f"N{f['coop_income']:,.2f}"],
-            ['Cooperative Expenses', f"N{f['coop_expenses']:,.2f}"],
-            ['Net Operational Profit', f"N{f['net_profit']:,.2f}"],
+            ['Money In', f"N{f['coop_income']:,.2f}"],
+            ['Money Out (incl. loans disbursed)', f"N{f['coop_expenses']:,.2f}"],
+            ['Net Cash Flow', f"N{f['net_profit']:,.2f}"],
         ]
 
         t = Table(table_data, colWidths=[3.5*inch, 2.5*inch])

@@ -31,8 +31,8 @@ class ShareAccountSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ShareAccount
-        fields = ['id', 'member', 'total_shares', 'current_value', 'recent_transactions']
-        read_only_fields = ['id', 'member', 'total_shares', 'current_value']
+        fields = ['id', 'member', 'total_shares', 'current_value', 'updated_at', 'recent_transactions']
+        read_only_fields = ['id', 'member', 'total_shares', 'current_value', 'updated_at']
 
     def get_recent_transactions(self, obj):
         txns = obj.transactions.all().order_by('-created_at')[:5]
