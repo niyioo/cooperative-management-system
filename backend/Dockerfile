@@ -16,7 +16,8 @@ RUN pip install --no-cache-dir --upgrade pip \
 
 COPY . /app/
 
-RUN useradd --create-home --uid 1000 app && chown -R app:app /app
+# media/ exists in the image so a volume mounted there is created writable by app.
+RUN useradd --create-home --uid 1000 app && mkdir -p /app/media && chown -R app:app /app
 USER app
 
 # collectstatic runs at boot so it sees the real environment variables.
