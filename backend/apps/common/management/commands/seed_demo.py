@@ -3,10 +3,12 @@ Load demonstration data for local development and training.
 
     python manage.py seed_demo
 
-Creates officers, members, two Christmas savers who are not members, products,
-monthly Regular Savings contributions (with some arrears), a Christmas Savings cycle
-with monthly contributions, a running loan, investments and a published dividend for last
-year, all through the normal services so every rule and audit entry applies.
+Creates the three officials and support staff, members, two Christmas savers who are
+not members, EMDI's four loans (Cooperative, Commodity, Electronics, Christmas), monthly
+Regular Savings contributions (with some arrears), Pre-retirement Savings, a Christmas
+Savings cycle with monthly contributions and a withdrawal, a running Cooperative Loan
+with two guarantors, investments and a published dividend for last year, all through the
+normal services so every rule and audit entry applies.
 
 Demo sign-ins (all share DEMO_PASSWORD below; change them if the database is
 reachable by anyone else):
@@ -100,9 +102,8 @@ class Command(BaseCommand):
         admin = self._officer("admin@demo.emdi.test", "Funmi", "Adewale", "Super Administrator", superuser=True)
         treasurer = self._officer("treasurer@demo.emdi.test", "Kunle", "Bakare", "Treasurer")
         chairman = self._officer("chairman@demo.emdi.test", "Emeka", "Nwosu", "Cooperative Chairman")
-        self._officer("secretary@demo.emdi.test", "Halima", "Usman", "Cooperative Secretary")
+        secretary = self._officer("secretary@demo.emdi.test", "Halima", "Usman", "Cooperative Secretary")
         accountant = self._officer("accountant@demo.emdi.test", "Tolu", "Ajayi", "Accountant")
-        loan_officer = self._officer("loans@demo.emdi.test", "Ngozi", "Eze", "Loan Officer")
 
         metallurgy = Department.objects.create(name="Metallurgical Engineering", code="MET")
         Department.objects.create(name="Ceramics and Glass", code="CER")
@@ -115,6 +116,9 @@ class Command(BaseCommand):
             for i, (first, last) in enumerate([("Chidi", "Obi"), ("Zainab", "Bello"), ("Tunde", "Ogun")], start=1)
         ]
         everyone = [ada, bayo, *others]
+        # Monthly take-home pay, so officers can see whether repayments fit (BR-37).
+        for member, pay in zip(everyone, ("320000", "240000", "210000", "260000", "190000")):
+            Member.objects.filter(pk=member.pk).update(monthly_net_pay=D(pay))
         # Christmas savers (BR-33): staff who are not members but save in Christmas Savings through payroll.
         savers = [
             create_member_record(
@@ -167,28 +171,60 @@ class Command(BaseCommand):
                 savings.post_contribution(accountant, account=account, amount=D("10000") if member == ada else D("5000"), period=period,
                                           value_date=datetime.date(year, month, 25), description=f"Payroll deduction {period:%b %Y}",
                                           external_reference=f"PAYROLL-{period:%Y-%m}")
+        # Grace took ₦10,000 out of her Christmas Savings in July (BR-40); the payout is what is left.
+        grace_christmas = SavingsAccount.objects.get(member=savers[0], cycle=cycle)
+        withdrawal = savings.post_withdrawal(treasurer, account=grace_christmas, amount=D("10000"),
+                                             reason="Hospital bill", value_date=min(datetime.date(year, 7, 14), today))
+        ledger.approve_entry(chairman, withdrawal)
+
+        # Pre-retirement Savings (BR-37): optional, kept until the member retires.
+        pre_retirement = SavingsProduct.objects.get(code="PRE_RETIREMENT")
+        ada_retirement = SavingsAccount.objects.create(member=ada, product=pre_retirement, opened_on=datetime.date(year, 1, 1))
+        Transaction.objects.create(member=ada, txn_type="SAVINGS_OPENING_BALANCE", entry_side="CREDIT", amount=D("60000"),
+                                   savings_account=ada_retirement, value_date=datetime.date(year, 1, 2), status="POSTED",
+                                   posted_at=timezone.now(), created_by=accountant, approved_by=treasurer,
+                                   description="Pre-retirement Savings balance brought forward")
+
         zainab = others[1]
         statutory.set_monthly_contribution(zainab.user, SavingsAccount.objects.get(member=zainab, product=regular),
                                            amount=D("8000"), by_member=True)
 
-        # A running loan for Ada (disbursed in March, repaid monthly since).
+        # EMDI's loans (BR-37): interest charged once on the amount borrowed; all but the
+        # Cooperative Loan must be repaid by October.
+        once = dict(interest_rate_basis="PER_LOAN", interest_method="FLAT", interest_collection="AMORTISED",
+                    min_amount=D("10000"), min_term_months=1, max_active_loans=1)
         product = LoanProduct.objects.create(
-            name="Regular Loan", code="REG", description="General purpose loan repaid through payroll.",
-            interest_rate=D("10"), min_amount=D("20000"), max_amount=D("2000000"),
-            min_term_months=3, max_term_months=24, min_membership_months=6,
-            required_documents=["Latest payslip"],
+            name="Cooperative Loan", code="REG", **once, interest_rate=D("12"), max_amount=D("50000000"), max_term_months=18,
+            max_savings_multiple=D("3"), official_savings_multiple=D("4"), guarantors_required=2, min_membership_months=6,
+            description="Cash loan: 12% once, up to 18 months, three times Regular Savings (four times for officials). "
+                        "Two guarantors.",
         )
         LoanProduct.objects.create(
-            name="Emergency Loan", code="EMG", description="Quick small loan, interest deducted upfront.",
-            interest_rate=D("5"), interest_rate_basis="PER_LOAN", interest_collection="UPFRONT",
-            min_amount=D("10000"), max_amount=D("150000"), min_term_months=1, max_term_months=6, min_membership_months=3,
+            name="Commodity Loan", code="COM", loan_type="COMMODITY", **once, interest_rate=D("10"), max_amount=D("200000"),
+            max_term_months=3, must_end_by_month=10, guarantors_required=0,
+            description="Goods on credit: 10% once, up to 3 months and ₦200,000, repaid by October.",
         )
-        application = loans.create_application(loan_officer, member=ada, product=product, amount_requested=D("240000"),
+        LoanProduct.objects.create(
+            name="Electronics Loan", code="ELE", loan_type="ELECTRONICS", **once, interest_rate=D("15"), max_amount=D("500000"),
+            max_term_months=6, must_end_by_month=10, guarantors_required=0,
+            description="Electronics on credit: 15% once, up to 6 months and ₦500,000, repaid by October.",
+        )
+        LoanProduct.objects.create(
+            name="Christmas Loan", code="XMAS", loan_type="CHRISTMAS", **once, interest_rate=D("20"), max_amount=D("50000000"),
+            max_term_months=6, must_end_by_month=10, guarantors_required=0, open_to_non_members=True,
+            description="From the Christmas Savings Fund: 20% once, up to 6 months, repaid by October; members and "
+                        "Christmas savers.",
+        )
+
+        # A running Cooperative Loan for Ada (paid out in March, repaid monthly since): Chidi and
+        # Zainab guarantee it, the Secretary collated it and the Chairman approved it.
+        application = loans.create_application(secretary, member=ada, product=product, amount_requested=D("240000"),
                                                term_months=12, purpose="Roofing repairs")
-        guarantee = loans.add_guarantor(loan_officer, application, others[0].membership_number)  # Chidi
-        loans.submit_application(loan_officer, application)
-        loans.respond_to_guarantee(others[0].user, guarantee, accept=True)
-        loans.start_review(loan_officer, application)
+        guarantees = [loans.add_guarantor(secretary, application, m.membership_number) for m in (others[0], others[1])]
+        loans.submit_application(secretary, application)
+        for guarantee, guarantor in zip(guarantees, (others[0], others[1])):
+            loans.respond_to_guarantee(guarantor.user, guarantee, accept=True)
+        loans.start_review(secretary, application)
         loans.approve_application(chairman, application)
         disbursed_on = datetime.date(year, 3, 10) if today >= datetime.date(year, 3, 10) else today
         loan = loans.disburse(treasurer, application, disbursed_on=disbursed_on)
@@ -196,12 +232,6 @@ class Command(BaseCommand):
         for instalment in loan.installments.filter(due_date__lt=today):
             loans.record_repayment(accountant, loan, amount=instalment.principal_due + instalment.interest_due,
                                    value_date=instalment.due_date, description="Payroll deduction")
-
-        # Bayo has an application waiting for review, with Ada asked to guarantee it.
-        pending = loans.create_application(bayo.user, member=bayo, product=product, amount_requested=D("150000"),
-                                           term_months=10, purpose="School fees")
-        loans.add_guarantor(bayo.user, pending, ada.membership_number)  # Ada is asked; her answer is pending
-        loans.submit_application(bayo.user, pending)
 
         # Investments, contributed last year, and last year's published dividend.
         shares = InvestmentProduct.objects.create(name="Share Capital", code="SHARES", min_amount=D("1000"),
