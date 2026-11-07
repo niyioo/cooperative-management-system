@@ -1,0 +1,12 @@
+# Keep the image to the code: no local environments, secrets, uploads or caches.
+venv/
+.venv/
+.env
+.env.*
+media/
+media-*/
+staticfiles/
+**/__pycache__/
+*.py[cod]
+*.log
+.pytest_cache/

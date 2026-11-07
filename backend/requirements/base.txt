@@ -1,0 +1,15 @@
+Django>=5.2,<5.3
+djangorestframework>=3.17.2,<3.18
+djangorestframework-simplejwt>=5.5,<5.6
+django-cors-headers>=4.7,<5
+django-filter>=25.1,<26
+drf-spectacular>=0.28,<0.29
+django-jazzmin>=3.0,<4
+argon2-cffi>=23.1
+psycopg2-binary>=2.9.10,<3
+dj-database-url>=2.3,<3
+python-dotenv>=1.0,<2
+pillow>=12.3,<13
+whitenoise>=6.9,<7
+openpyxl>=3.1,<4
+reportlab>=4.4,<5
