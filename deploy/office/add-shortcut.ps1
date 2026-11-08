@@ -8,8 +8,10 @@ $ErrorActionPreference = "Stop"
 $address = "http://$Server$(if ($Port -ne 80) { ":$Port" })/"
 
 # The icon is kept on this computer, so the shortcut still works once the
-# installation files (or the flash drive) are gone.
-$home_ = Join-Path $env:LOCALAPPDATA "EMDI"
+# installation files (or the flash drive) are gone. ProgramData, not AppData:
+# packaged apps (e.g. a terminal from the Store) get a private copy of AppData
+# that Explorer never sees, which leaves the shortcut with a blank icon.
+$home_ = Join-Path $env:ProgramData "EMDI"
 New-Item -ItemType Directory -Force $home_ | Out-Null
 # Named after the icon's contents: Windows caches icons by file path, so a new
 # icon under the old name would keep showing the old picture.
