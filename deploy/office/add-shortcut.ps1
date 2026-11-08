@@ -11,8 +11,13 @@ $address = "http://$Server$(if ($Port -ne 80) { ":$Port" })/"
 # installation files (or the flash drive) are gone.
 $home_ = Join-Path $env:LOCALAPPDATA "EMDI"
 New-Item -ItemType Directory -Force $home_ | Out-Null
-$icon = Join-Path $home_ "emdi.ico"
-Copy-Item (Join-Path $PSScriptRoot "emdi.ico") $icon -Force
+# Named after the icon's contents: Windows caches icons by file path, so a new
+# icon under the old name would keep showing the old picture.
+$source = Join-Path $PSScriptRoot "emdi.ico"
+$hash = (Get-FileHash $source -Algorithm SHA256).Hash.Substring(0, 8).ToLower()
+$icon = Join-Path $home_ "emdi-$hash.ico"
+Get-ChildItem $home_ -Filter "emdi*.ico" | Where-Object { $_.FullName -ne $icon } | Remove-Item -ErrorAction SilentlyContinue
+Copy-Item $source $icon -Force
 
 $edge = @(
     "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
