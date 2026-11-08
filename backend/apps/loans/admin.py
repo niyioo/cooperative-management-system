@@ -1,67 +1,76 @@
-from django.contrib import admin, messages
-from rest_framework.exceptions import APIException
+from django.contrib import admin
 
-from apps.core.admin import ReadOnlyAdminMixin
+from apps.common.admin import AuditedAdminMixin, NoDeleteAdminMixin, ReadOnlyAdminMixin
 
-from . import services
-from .models import Loan, LoanGuarantor, LoanProduct, LoanRepayment
+from .models import (
+    Loan,
+    LoanApplication,
+    LoanApplicationDocument,
+    LoanGuarantor,
+    LoanProduct,
+    LoanRepayment,
+    RepaymentAllocation,
+    RepaymentInstallment,
+)
+
+# Workflow actions (approve, disburse, repay) live in the officer portal so they
+# always go through the service layer, ledger and audit log. The Django admin
+# is read-mostly for loans.
 
 
 @admin.register(LoanProduct)
-class LoanProductAdmin(admin.ModelAdmin):
-    list_display = ('name', 'interest_rate', 'max_amount', 'max_duration_months', 'is_active')
-    list_filter = ('is_active',)
-    search_fields = ('name',)
+class LoanProductAdmin(AuditedAdminMixin, NoDeleteAdminMixin, admin.ModelAdmin):
+    list_display = ("name", "code", "interest_rate", "interest_rate_basis", "interest_method", "max_amount", "max_term_months", "is_active")
+    list_filter = ("is_active", "interest_method", "interest_rate_basis")
+    search_fields = ("name", "code")
 
 
-def _error_text(exc) -> str:
-    detail = getattr(exc, 'detail', exc)
-    if isinstance(detail, dict):
-        return " ".join(str(v[0] if isinstance(v, list) else v) for v in detail.values())
-    return str(detail)
+class LoanApplicationDocumentInline(ReadOnlyAdminMixin, admin.TabularInline):
+    model = LoanApplicationDocument
+    extra = 0
+    fields = ("title", "file", "uploaded_by", "created_at")
+    readonly_fields = fields
+
+
+class LoanGuarantorInline(ReadOnlyAdminMixin, admin.TabularInline):
+    model = LoanGuarantor
+    extra = 0
+    fields = ("guarantor", "amount_guaranteed", "status", "responded_at")
+    readonly_fields = fields
+
+
+@admin.register(LoanApplication)
+class LoanApplicationAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
+    list_display = ("reference", "member", "product", "amount_requested", "term_months", "status", "submitted_at")
+    list_filter = ("status", "product")
+    search_fields = ("reference", "member__membership_number", "member__last_name")
+    inlines = [LoanGuarantorInline, LoanApplicationDocumentInline]
+
+
+class RepaymentInstallmentInline(ReadOnlyAdminMixin, admin.TabularInline):
+    model = RepaymentInstallment
+    extra = 0
+    fields = ("number", "due_date", "principal_due", "interest_due")
+    readonly_fields = fields
 
 
 @admin.register(Loan)
 class LoanAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
-    """Loans change only through the same rules as the app (see apps.loans.services)."""
-
-    list_display = ('loan_id', 'member', 'loan_product', 'principal_amount', 'balance_remaining', 'status', 'application_date')
-    list_filter = ('status', 'loan_product', 'application_date')
-    search_fields = ('loan_id', 'member__membership_id', 'member__first_name', 'member__last_name')
-    actions = ['approve_loans', 'reject_loans', 'disburse_loans']
-
-    def _run(self, request, queryset, step, label):
-        done = 0
-        for loan in queryset:
-            try:
-                step(loan, by=request.user)
-                done += 1
-            except APIException as exc:
-                self.message_user(request, f"{loan.loan_id}: {_error_text(exc)}", level=messages.WARNING)
-        if done:
-            self.message_user(request, f"{label} {done} loan(s).", level=messages.SUCCESS)
-
-    @admin.action(description='Approve selected pending loans')
-    def approve_loans(self, request, queryset):
-        self._run(request, queryset, services.approve, "Approved")
-
-    @admin.action(description='Reject selected pending loans')
-    def reject_loans(self, request, queryset):
-        self._run(request, queryset, services.reject, "Rejected")
-
-    @admin.action(description='Disburse selected approved loans')
-    def disburse_loans(self, request, queryset):
-        self._run(request, queryset, services.disburse, "Disbursed")
+    list_display = ("reference", "member", "product", "principal", "term_months", "disbursed_on", "maturity_date", "status")
+    list_filter = ("status", "product", "is_migrated")
+    search_fields = ("reference", "member__membership_number", "member__last_name")
+    inlines = [RepaymentInstallmentInline]
 
 
-@admin.register(LoanGuarantor)
-class LoanGuarantorAdmin(admin.ModelAdmin):
-    list_display = ('loan', 'guarantor_member', 'amount_guaranteed', 'status')
-    list_filter = ('status',)
-    search_fields = ('loan__loan_id', 'guarantor_member__membership_id')
+class RepaymentAllocationInline(ReadOnlyAdminMixin, admin.TabularInline):
+    model = RepaymentAllocation
+    extra = 0
+    fields = ("installment", "principal_amount", "interest_amount")
+    readonly_fields = fields
 
 
 @admin.register(LoanRepayment)
 class LoanRepaymentAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
-    list_display = ('receipt_reference', 'loan', 'amount_paid', 'payment_date', 'received_by')
-    search_fields = ('receipt_reference', 'loan__loan_id')
+    list_display = ("transaction", "loan", "principal_component", "interest_component", "penalty_component", "created_at")
+    search_fields = ("transaction__reference", "loan__reference")
+    inlines = [RepaymentAllocationInline]
